@@ -1,4 +1,4 @@
-export type ViewKey = "dashboard" | "candidates" | "jobs" | "matching" | "actions" | "integrations";
+export type ViewKey = "dashboard" | "candidates" | "jobs" | "matching" | "revival" | "actions" | "integrations";
 
 export interface DashboardData {
   counts: {
@@ -9,8 +9,14 @@ export interface DashboardData {
     applications: number;
     open_actions: number;
     pending_outbox: number;
+    recommendations: number;
+    interviews: number;
+    closed_won: number;
+    new_jobs: number;
   };
   pipeline: Record<string, number>;
+  pipeline_scope: string;
+  companies: string[];
   actions: ActionItem[];
   activity: AuditItem[];
 }
@@ -21,6 +27,7 @@ export interface Candidate {
   name: string;
   status: string;
   ca_owner: string;
+  email: string | null;
   role_title: string;
   age: number | null;
   gender: string | null;
@@ -29,7 +36,16 @@ export interface Candidate {
   desired_salary_million: number | null;
   commute_minutes: number | null;
   work_style: string;
+  remote_preference: string;
+  specialization: string | null;
+  specialization_years: number;
+  recent_tenure_years: number;
   skills: string[];
+  internal_parallel_count: number;
+  external_parallel_count: number;
+  current_processes: Array<{ scope: "internal" | "external"; label: string; stage: string }>;
+  skill_sheet_filename: string | null;
+  skill_sheet_uploaded_at: string | null;
   last_contact_date: string | null;
   avg_response_days: number | null;
   notes: string | null;
@@ -49,6 +65,11 @@ export interface Job {
   salary_max_million: number | null;
   received_date: string;
   min_experience_years: number;
+  preferred_age_min: number | null;
+  preferred_age_max: number | null;
+  remote_mode: string;
+  specialization: string | null;
+  min_specialization_years: number;
   min_jlpt: string | null;
   max_commute_minutes: number | null;
   required_skills: string[];
@@ -65,6 +86,9 @@ export interface MatchItem {
   candidate_experience: number;
   candidate_owner: string;
   candidate_notes: string | null;
+  candidate_internal_parallel: number;
+  candidate_external_parallel: number;
+  candidate_skill_sheet: string | null;
   job_id: string;
   job_title: string;
   company_name: string;
@@ -131,4 +155,15 @@ export interface AuditItem {
   entity_id: string;
   details: Record<string, unknown>;
   created_at: string;
+}
+
+export interface RecommendationDraft {
+  match_id: string;
+  candidate_id: string;
+  company_id: string;
+  recipient_label: string;
+  recipient: string | null;
+  subject: string;
+  body: string;
+  skill_sheet_filename: string | null;
 }

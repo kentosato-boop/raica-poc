@@ -1,6 +1,6 @@
 # RAiCA 2.0
 
-RA（企業担当）とCA（候補者担当）の行動を、候補者・求人・選考データから生成するフルスタック業務アプリです。単一HTMLデモではなく、React/TypeScript、FastAPI、SQLAlchemy、PostgreSQL/SQLiteで構成しています。
+RA（企業担当）とCA（候補者担当）が、推薦、面談、成約、並行状況、自分の次アクションを一つの業務画面で管理するアプリです。
 
 ## 構成
 
@@ -15,9 +15,11 @@ compose.yaml          PostgreSQL + RAiCAの一括起動
 
 ## 実装済み
 
-- 候補者、企業、求人、AIマッチ、選考、対応キュー、連絡履歴
-- スキル35%、経験20%、日本語15%、給与15%、通勤15%の再スコアリング
-- 推薦承認から選考レコード作成までのトランザクション
+- 候補者、企業、案件、AIマッチ、選考、自分のボール、連絡履歴
+- スキル、総経験、日本語、給与、通勤、年齢、勤務形態、専門経験、職歴安定性の9軸スコアリング
+- PDF/Wordスキルシート解析と候補者レコードへの反映
+- 社内並行・他社並行の一覧と選考ステージ表示
+- 推薦承認後の推薦文生成、スキルシート添付、Gmail API送信
 - Gmail、Zalo、Asana向けOutboxと再送処理
 - Porters候補者・求人APIの取得、正規化、upsert、同期履歴
 - 操作監査ログと任意APIキー認証
@@ -59,7 +61,7 @@ PostgreSQLの永続ボリュームを使用し、ビルド済みフロントをF
 | 連携 | 環境変数 | 動作 |
 |---|---|---|
 | Porters | `RAICA_PORTERS_*` | 候補者・求人APIを取得しDBへupsert |
-| Gmail | `RAICA_GMAIL_WEBHOOK_URL` | 承認済み企業メールをOutbox経由で送信 |
+| Gmail | `RAICA_GMAIL_ACCESS_TOKEN`, `RAICA_GMAIL_SENDER` | 承認済み推薦文とスキルシートをGmail APIで送信 |
 | Zalo OA | `RAICA_ZALO_WEBHOOK_URL` | 承認済み候補者メッセージを送信 |
 | Asana | `RAICA_ASANA_WEBHOOK_URL` | 電話・フォロータスクを外部同期 |
 
@@ -71,10 +73,11 @@ PostgreSQLの永続ボリュームを使用し、ビルド済みフロントをF
 |---|---|---|
 | GET | `/api/v1/dashboard` | KPI、パイプライン、優先対応、操作履歴 |
 | GET | `/api/v1/candidates` | 候補者検索・状態フィルタ |
-| GET | `/api/v1/jobs` | 求人一覧 |
-| POST | `/api/v1/jobs/{id}/matches/run` | 5軸マッチング再計算 |
-| PATCH | `/api/v1/matches/{id}` | 推薦承認・見送り |
-| GET/PATCH | `/api/v1/actions` | RA/CA対応キュー |
+| POST | `/api/v1/candidates/{id}/skill-sheet` | スキルシート解析・候補者DB反映 |
+| GET | `/api/v1/jobs?q=` | 案件検索 |
+| POST | `/api/v1/jobs/{id}/matches/run` | 9軸マッチング再計算 |
+| PATCH | `/api/v1/matches/{id}` | 推薦承認・推薦文生成・見送り |
+| GET/PATCH | `/api/v1/actions` | RA/CAの自分のボール |
 | POST | `/api/v1/contacts` | HITL承認済み連絡をOutboxへ登録 |
 | POST | `/api/v1/sync/porters` | Porters API同期 |
 | GET | `/api/v1/integrations` | 外部接続状態 |

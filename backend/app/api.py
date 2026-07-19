@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+import base64
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,6 +15,7 @@ from .integrations import dispatch_event, enqueue_event, integration_snapshot, s
 from .matching import WEIGHTS, run_matching
 from .models import ActionItem, Application, AuditLog, Candidate, Company, ContactLog, IntegrationConnection, Job, Match, OutboxEvent, SyncRun
 from .schemas import ActionUpdate, ActorRequest, ContactCreate, MatchDecision, OutboxRetry
+from .skill_sheets import analyze_skill_sheet, extract_text
 
 
 router = APIRouter(prefix="/api/v1")
@@ -25,6 +28,7 @@ def candidate_dict(candidate: Candidate) -> dict:
         "name": candidate.name,
         "status": candidate.status,
         "ca_owner": candidate.ca_owner,
+        "email": candidate.email,
         "role_title": candidate.role_title,
         "age": candidate.age,
         "gender": candidate.gender,
@@ -33,7 +37,16 @@ def candidate_dict(candidate: Candidate) -> dict:
         "desired_salary_million": candidate.desired_salary_million,
         "commute_minutes": candidate.commute_minutes,
         "work_style": candidate.work_style,
+        "remote_preference": candidate.remote_preference,
+        "specialization": candidate.specialization,
+        "specialization_years": candidate.specialization_years,
+        "recent_tenure_years": candidate.recent_tenure_years,
         "skills": candidate.skills,
+        "internal_parallel_count": candidate.internal_parallel_count,
+        "external_parallel_count": candidate.external_parallel_count,
+        "current_processes": candidate.current_processes,
+        "skill_sheet_filename": candidate.skill_sheet_filename,
+        "skill_sheet_uploaded_at": candidate.skill_sheet_uploaded_at,
         "last_contact_date": candidate.last_contact_date,
         "avg_response_days": candidate.avg_response_days,
         "notes": candidate.notes,
@@ -55,6 +68,11 @@ def job_dict(job: Job) -> dict:
         "salary_max_million": job.salary_max_million,
         "received_date": job.received_date,
         "min_experience_years": job.min_experience_years,
+        "preferred_age_min": job.preferred_age_min,
+        "preferred_age_max": job.preferred_age_max,
+        "remote_mode": job.remote_mode,
+        "specialization": job.specialization,
+        "min_specialization_years": job.min_specialization_years,
         "min_jlpt": job.min_jlpt,
         "max_commute_minutes": job.max_commute_minutes,
         "required_skills": job.required_skills,
@@ -73,6 +91,9 @@ def match_dict(item: Match) -> dict:
         "candidate_experience": item.candidate.years_experience,
         "candidate_owner": item.candidate.ca_owner,
         "candidate_notes": item.candidate.notes,
+        "candidate_internal_parallel": item.candidate.internal_parallel_count,
+        "candidate_external_parallel": item.candidate.external_parallel_count,
+        "candidate_skill_sheet": item.candidate.skill_sheet_filename,
         "job_id": item.job_id,
         "job_title": item.job.title,
         "company_name": item.job.company.name,
@@ -83,6 +104,10 @@ def match_dict(item: Match) -> dict:
             "japanese": item.japanese_score,
             "salary": item.salary_score,
             "commute": item.commute_score,
+            "age": item.age_score,
+            "remote": item.remote_score,
+            "specialization": item.specialization_score,
+            "stability": item.stability_score,
         },
         "similarity_pct": item.similarity_pct,
         "ng_check": item.ng_check,
@@ -107,7 +132,18 @@ def action_dict(item: ActionItem) -> dict:
 
 
 @router.get("/dashboard")
-def dashboard(db: Session = Depends(get_db)) -> dict:
+def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(get_db)) -> dict:
+    today = date.today()
+    owner = owner or ("RA 太郎" if role == "ra" else "CA Huong")
+    application_scope = select(Application)
+    if role == "ra":
+        application_scope = application_scope.join(Job, Application.job_id == Job.id).join(Company, Job.company_id == Company.id).where(Company.ra_owner == owner)
+    else:
+        application_scope = application_scope.join(Candidate, Application.candidate_id == Candidate.id).where(Candidate.ca_owner == owner)
+    scoped_applications = db.scalars(application_scope).all()
+    recommendation_count = sum(item.stage in {"recommended", "screening", "first_interview", "final_interview", "offer", "closed_won"} for item in scoped_applications)
+    interview_count = sum(item.stage in {"first_interview", "final_interview"} for item in scoped_applications)
+    closed_won_count = sum(item.stage == "closed_won" or (item.company_ok and item.candidate_ok) for item in scoped_applications)
     counts = {
         "candidates": db.scalar(select(func.count()).select_from(Candidate)) or 0,
         "active_candidates": db.scalar(select(func.count()).select_from(Candidate).where(Candidate.status == "active")) or 0,
@@ -116,14 +152,25 @@ def dashboard(db: Session = Depends(get_db)) -> dict:
         "applications": db.scalar(select(func.count()).select_from(Application)) or 0,
         "open_actions": db.scalar(select(func.count()).select_from(ActionItem).where(ActionItem.status == "open")) or 0,
         "pending_outbox": db.scalar(select(func.count()).select_from(OutboxEvent).where(OutboxEvent.status.in_(["pending", "failed"]))) or 0,
+        "recommendations": recommendation_count,
+        "interviews": interview_count,
+        "closed_won": closed_won_count,
+        "new_jobs": db.scalar(select(func.count()).select_from(Job).where(Job.received_date >= today - timedelta(days=7))) or 0,
     }
-    stages = dict(db.execute(select(Application.stage, func.count()).group_by(Application.stage)).all())
-    actions = db.scalars(select(ActionItem).where(ActionItem.status == "open").order_by(ActionItem.due_date, ActionItem.severity).limit(6)).all()
+    stages: dict[str, int] = {}
+    for item in scoped_applications:
+        stages[item.stage] = stages.get(item.stage, 0) + 1
+    actions = db.scalars(select(ActionItem).where(ActionItem.status == "open", ActionItem.owner_role == role).order_by(ActionItem.due_date, ActionItem.severity).limit(8)).all()
     activity = db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(8)).all()
+    company_names = []
+    if role == "ra":
+        company_names = list(db.scalars(select(Company.name).where(Company.ra_owner == owner).order_by(Company.name)).all())
     return {
         "counts": counts,
         "pipeline": stages,
         "actions": [action_dict(item) for item in actions],
+        "pipeline_scope": f"{owner}の担当企業" if role == "ra" else f"{owner}の担当候補者",
+        "companies": company_names,
         "activity": [{"id": item.id, "actor": item.actor, "action": item.action, "entity_type": item.entity_type, "entity_id": item.entity_id, "details": item.details, "created_at": item.created_at} for item in activity],
     }
 
@@ -143,10 +190,72 @@ def candidates(
     return [candidate_dict(item) for item in db.scalars(statement.order_by(Candidate.last_contact_date.desc(), Candidate.name)).all()]
 
 
+@router.get("/candidates/{candidate_id}")
+def candidate_detail(candidate_id: str, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="candidate not found")
+    return candidate_dict(candidate)
+
+
+@router.post("/candidates/{candidate_id}/skill-sheet")
+async def upload_skill_sheet(candidate_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="candidate not found")
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="skill sheet must be 8MB or smaller")
+    try:
+        text = extract_text(file.filename or "skill-sheet", content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    analysis = analyze_skill_sheet(text)
+    candidate.skills = sorted(set(candidate.skills or []) | set(analysis["skills"]))
+    if analysis["specialization"]:
+        candidate.specialization = str(analysis["specialization"])
+    candidate.specialization_years = max(candidate.specialization_years or 0, float(analysis["specialization_years"]))
+    candidate.skill_sheet_filename = file.filename
+    suffix = Path(file.filename or "skill-sheet.txt").suffix.lower()
+    storage_dir = Path(__file__).resolve().parents[2] / "data" / "skill_sheets"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    storage_path = storage_dir / f"{candidate.id}{suffix}"
+    storage_path.write_bytes(content)
+    candidate.skill_sheet_path = str(storage_path)
+    candidate.skill_sheet_uploaded_at = datetime.now(timezone.utc)
+    candidate.skill_sheet_text = text[:50000]
+    db.add(AuditLog(actor=candidate.ca_owner, action="candidate.skill_sheet.upload", entity_type="candidate", entity_id=candidate.id, details={"filename": file.filename, "skills": analysis["skills"]}))
+    db.commit()
+    db.refresh(candidate)
+    return {"candidate": candidate_dict(candidate), "analysis": analysis}
+
+
 @router.get("/jobs")
-def jobs(db: Session = Depends(get_db)) -> list[dict]:
+def jobs(q: str | None = Query(default=None, max_length=100), db: Session = Depends(get_db)) -> list[dict]:
     statement = select(Job).options(selectinload(Job.company)).order_by(Job.received_date.desc())
+    if q:
+        token = f"%{q}%"
+        statement = statement.join(Company).where(or_(Job.title.ilike(token), Job.location.ilike(token), Job.industry.ilike(token), Company.name.ilike(token)))
     return [job_dict(item) for item in db.scalars(statement).all()]
+
+
+def build_recommendation_draft(item: Match) -> dict:
+    candidate = item.candidate
+    job = item.job
+    recipient = job.company.name
+    subject = f"【人材推薦】{candidate.name}様 / {job.title}"
+    body = (
+        f"{recipient} 採用ご担当者様\n\n"
+        f"{job.title}の候補者として、{candidate.name}様をご推薦いたします。\n\n"
+        f"■ 推薦理由\n{item.evidence_quote}\n"
+        f"・総合適合度: {item.score}点\n"
+        f"・専門領域: {candidate.specialization or '未登録'}（{candidate.specialization_years:g}年）\n"
+        f"・直近勤続: {candidate.recent_tenure_years:g}年\n"
+        f"・社内並行: {candidate.internal_parallel_count}件 / 他社並行: {candidate.external_parallel_count}件\n\n"
+        f"スキルシート: {candidate.skill_sheet_filename or '未登録'}\n"
+        "ご確認のうえ、面談可否をご返信いただけますと幸いです。"
+    )
+    return {"match_id": item.id, "candidate_id": candidate.id, "company_id": job.company_id, "recipient_label": recipient, "recipient": None, "subject": subject, "body": body, "skill_sheet_filename": candidate.skill_sheet_filename}
 
 
 @router.get("/jobs/{job_id}/matches")
@@ -168,7 +277,7 @@ def rerun_matches(job_id: str, payload: ActorRequest, db: Session = Depends(get_
 
 @router.patch("/matches/{match_id}")
 def decide_match(match_id: str, payload: MatchDecision, db: Session = Depends(get_db)) -> dict:
-    item = db.get(Match, match_id)
+    item = db.scalar(select(Match).where(Match.id == match_id).options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)))
     if not item:
         raise HTTPException(status_code=404, detail="match not found")
     item.recommendation_status = payload.status
@@ -182,7 +291,15 @@ def decide_match(match_id: str, payload: MatchDecision, db: Session = Depends(ge
             application.last_event_at = date.today()
     db.add(AuditLog(actor=payload.actor, action="match.decision", entity_type="match", entity_id=item.id, details={"status": payload.status}))
     db.commit()
-    return {"id": item.id, "recommendation_status": item.recommendation_status}
+    return {"id": item.id, "recommendation_status": item.recommendation_status, "recommendation_draft": build_recommendation_draft(item) if payload.status in {"approved", "process"} else None}
+
+
+@router.get("/matches/{match_id}/recommendation-draft")
+def recommendation_draft(match_id: str, db: Session = Depends(get_db)) -> dict:
+    item = db.scalar(select(Match).where(Match.id == match_id).options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)))
+    if not item:
+        raise HTTPException(status_code=404, detail="match not found")
+    return build_recommendation_draft(item)
 
 
 @router.get("/actions")
@@ -212,7 +329,13 @@ def create_contact(payload: ContactCreate, db: Session = Depends(get_db), settin
     contact = ContactLog(id=contact_id, candidate_id=payload.candidate_id, company_id=payload.company_id, channel=payload.channel, subject=payload.subject, body=payload.body, human_approved_by=payload.human_approved_by)
     db.add(contact)
     provider = payload.channel if payload.channel in {"gmail", "zalo"} else "asana"
-    event = enqueue_event(db, provider, "contact.send" if payload.channel != "phone" else "task.create", contact_id, payload.model_dump())
+    event_payload = payload.model_dump()
+    if payload.channel == "gmail" and payload.candidate_id:
+        candidate = db.get(Candidate, payload.candidate_id)
+        if candidate and candidate.skill_sheet_path and Path(candidate.skill_sheet_path).exists():
+            event_payload["attachment_name"] = candidate.skill_sheet_filename
+            event_payload["attachment_base64"] = base64.b64encode(Path(candidate.skill_sheet_path).read_bytes()).decode()
+    event = enqueue_event(db, provider, "contact.send" if payload.channel != "phone" else "task.create", contact_id, event_payload)
     if payload.action_id:
         action = db.get(ActionItem, payload.action_id)
         if action:

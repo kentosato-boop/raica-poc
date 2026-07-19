@@ -1,4 +1,5 @@
 *.sqlite3
+data/skill_sheets/
 .env
 .venv/
 __pycache__/

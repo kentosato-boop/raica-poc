@@ -8,8 +8,54 @@ from sqlalchemy.orm import Session
 from .models import ActionItem, Application, Candidate, Company, IntegrationConnection, Job
 
 
+def enrich_workflow_data(db: Session) -> None:
+    candidate_profiles = {
+        "cand-hoa": {"email": "hoa@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 4.5, "recent_tenure_years": 3.2, "internal_parallel_count": 2, "external_parallel_count": 1, "current_processes": [{"scope": "internal", "label": "A社 ラインリーダー", "stage": "オファー"}, {"scope": "internal", "label": "B社 製造管理", "stage": "意向確認"}, {"scope": "external", "label": "他社選考", "stage": "一次面接"}]},
+        "cand-son": {"email": "son@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 2.5, "recent_tenure_years": 1.3, "internal_parallel_count": 1, "external_parallel_count": 0, "current_processes": [{"scope": "internal", "label": "A社 第2ライン", "stage": "書類選考"}]},
+        "cand-minh": {"email": "minh@example.invalid", "remote_preference": "flexible", "specialization": "qc", "specialization_years": 4, "recent_tenure_years": 2.8, "internal_parallel_count": 1, "external_parallel_count": 1, "current_processes": [{"scope": "internal", "label": "B社 QC", "stage": "一次面接"}, {"scope": "external", "label": "他社品質管理", "stage": "書類選考"}]},
+        "cand-huy": {"email": "huy@example.invalid", "remote_preference": "onsite", "specialization": "cnc", "specialization_years": 5.5, "recent_tenure_years": 3.5, "internal_parallel_count": 1, "external_parallel_count": 2, "current_processes": [{"scope": "internal", "label": "C社 CNC", "stage": "書類選考"}, {"scope": "external", "label": "他社CNC", "stage": "最終面接"}, {"scope": "external", "label": "他社旋盤", "stage": "一次面接"}]},
+        "cand-trang": {"email": "trang@example.invalid", "remote_preference": "hybrid", "specialization": "interpretation", "specialization_years": 4, "recent_tenure_years": 2.1, "internal_parallel_count": 1, "external_parallel_count": 0, "current_processes": [{"scope": "internal", "label": "D社 総務通訳", "stage": "意向確認"}]},
+        "cand-mai": {"email": "mai@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 2, "recent_tenure_years": 2.4, "internal_parallel_count": 0, "external_parallel_count": 0, "current_processes": []},
+        "cand-quan": {"email": "quan@example.invalid", "remote_preference": "remote", "specialization": "backend", "specialization_years": 5, "recent_tenure_years": 1.8, "internal_parallel_count": 1, "external_parallel_count": 2, "current_processes": [{"scope": "internal", "label": "F社 Backend", "stage": "推薦準備"}, {"scope": "external", "label": "他社SaaS", "stage": "技術面接通過"}, {"scope": "external", "label": "他社Fintech", "stage": "一次面接"}]},
+        "cand-lan": {"email": "lan@example.invalid", "remote_preference": "onsite", "specialization": "assembly", "specialization_years": 3, "recent_tenure_years": 0.8, "internal_parallel_count": 0, "external_parallel_count": 0, "current_processes": []},
+    }
+    for candidate_id, values in candidate_profiles.items():
+        candidate = db.get(Candidate, candidate_id)
+        if candidate:
+            for key, value in values.items():
+                setattr(candidate, key, value)
+
+    company_owners = {"co-a": "RA 太郎", "co-b": "RA 太郎", "co-c": "RA 太郎", "co-d": "RA Linh", "co-e": "RA 太郎", "co-f": "RA Linh"}
+    for company_id, owner in company_owners.items():
+        company = db.get(Company, company_id)
+        if company:
+            company.ra_owner = owner
+
+    job_profiles = {
+        "job-a-line": (24, 35, "onsite", "line_management", 4),
+        "job-a-phase2": (22, 38, "onsite", "line_management", 2),
+        "job-b-qc": (24, 38, "onsite", "qc", 3),
+        "job-c-cnc": (22, 40, "onsite", "cnc", 3),
+        "job-d-interpreter": (24, 38, "hybrid", "interpretation", 3),
+        "job-f-backend": (24, 40, "remote", "backend", 4),
+    }
+    for job_id, (age_min, age_max, remote_mode, specialization, years) in job_profiles.items():
+        job = db.get(Job, job_id)
+        if job:
+            job.preferred_age_min = age_min
+            job.preferred_age_max = age_max
+            job.remote_mode = remote_mode
+            job.specialization = specialization
+            job.min_specialization_years = years
+
+    if db.get(Candidate, "cand-mai") and db.get(Job, "job-a-line") and not db.get(Application, "app-mai-a-won"):
+        db.add(Application(id="app-mai-a-won", candidate_id="cand-mai", job_id="job-a-line", stage="closed_won", recommended_at=date(2026, 7, 2), last_event_at=date(2026, 7, 18), company_ok=True, candidate_ok=True))
+    db.commit()
+
+
 def seed_database(db: Session) -> None:
     if db.scalar(select(func.count()).select_from(Candidate)):
+        enrich_workflow_data(db)
         return
 
     companies = [
@@ -59,4 +105,5 @@ def seed_database(db: Session) -> None:
         IntegrationConnection(provider="asana", status="not_configured", capabilities=["task.create", "task.complete"]),
     ]
     db.add_all(companies + jobs + candidates + applications + actions + integrations)
-    db.commit()
+    db.flush()
+    enrich_workflow_data(db)

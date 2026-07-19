@@ -22,6 +22,7 @@ class ContactCreate(BaseModel):
     candidate_id: str | None = None
     company_id: str | None = None
     subject: str | None = Field(default=None, max_length=240)
+    recipient: str | None = Field(default=None, max_length=180)
     action_id: str | None = None
 
 

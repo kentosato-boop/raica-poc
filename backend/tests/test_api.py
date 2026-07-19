@@ -22,6 +22,9 @@ def test_health_and_dashboard():
         assert dashboard["counts"]["candidates"] == 8
         assert dashboard["counts"]["open_jobs"] == 6
         assert dashboard["counts"]["open_actions"] == 5
+        assert dashboard["counts"]["recommendations"] >= 1
+        assert dashboard["counts"]["closed_won"] == 1
+        assert dashboard["pipeline_scope"] == "RA 太郎の担当企業"
 
 
 def test_candidate_search_and_job_matching():
@@ -34,6 +37,8 @@ def test_candidate_search_and_job_matching():
         assert payload["generated"] >= 1
         assert payload["matches"][0]["candidate_id"] == "cand-huy"
         assert payload["matches"][0]["score"] >= 70
+        assert payload["matches"][0]["score"] < 100
+        assert {"age", "remote", "specialization", "stability"}.issubset(payload["matches"][0]["scores"])
 
 
 def test_match_approval_persists_application():
@@ -42,6 +47,7 @@ def test_match_approval_persists_application():
         response = client.patch(f"/api/v1/matches/{match['id']}", json={"status": "approved", "actor": "RA test"})
         assert response.status_code == 200
         assert response.json()["recommendation_status"] == "approved"
+        assert response.json()["recommendation_draft"]["subject"].startswith("【人材推薦】")
     with SessionLocal() as db:
         application = db.scalar(select(Application).where(Application.candidate_id == match["candidate_id"], Application.job_id == "job-a-phase2"))
         assert application is not None
@@ -73,6 +79,20 @@ def test_integration_status_reports_missing_configuration():
         assert all(item["configured"] is False for item in integrations)
         result = client.post("/api/v1/integrations/gmail/test", json={"actor": "pytest"}).json()
         assert result["status"] == "not_configured"
+
+
+def test_job_search_and_skill_sheet_upload():
+    with TestClient(app) as client:
+        jobs = client.get("/api/v1/jobs", params={"q": "Backend"}).json()
+        assert [job["id"] for job in jobs] == ["job-f-backend"]
+        response = client.post(
+            "/api/v1/candidates/cand-quan/skill-sheet",
+            files={"file": ("quan-skill.txt", b"Python backend engineer 5 years FastAPI", "text/plain")},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert "python" in payload["candidate"]["skills"]
+        assert payload["candidate"]["skill_sheet_filename"] == "quan-skill.txt"
 
 
 def test_porters_sync_upserts_api_records(monkeypatch):

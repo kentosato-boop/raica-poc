@@ -1,4 +1,4 @@
-import type { ActionItem, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, SyncRun } from "./types";
+import type { ActionItem, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, SyncRun } from "./types";
 
 const API_KEY = import.meta.env.VITE_RAICA_API_KEY as string | undefined;
 
@@ -6,7 +6,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(options?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...(API_KEY ? { "X-RAICA-Key": API_KEY } : {}),
       ...options?.headers,
     },
@@ -18,12 +18,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean; version: string; environment: string }>("/health"),
-  dashboard: () => request<DashboardData>("/api/v1/dashboard"),
+  dashboard: (role = "ra", owner = "") => request<DashboardData>(`/api/v1/dashboard?role=${encodeURIComponent(role)}&owner=${encodeURIComponent(owner)}`),
   candidates: (query = "", status = "") => request<Candidate[]>(`/api/v1/candidates?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`),
-  jobs: () => request<Job[]>("/api/v1/jobs"),
+  candidate: (candidateId: string) => request<Candidate>(`/api/v1/candidates/${candidateId}`),
+  uploadSkillSheet: (candidateId: string, file: File) => { const form = new FormData(); form.append("file", file); return request<{ candidate: Candidate; analysis: { skills: string[]; specialization: string | null; specialization_years: number } }>(`/api/v1/candidates/${candidateId}/skill-sheet`, { method: "POST", body: form }); },
+  jobs: (query = "") => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}`),
   matches: (jobId: string) => request<MatchItem[]>(`/api/v1/jobs/${jobId}/matches`),
   rerunMatches: (jobId: string, actor: string) => request<{ generated: number; matches: MatchItem[] }>(`/api/v1/jobs/${jobId}/matches/run`, { method: "POST", body: JSON.stringify({ actor }) }),
-  decideMatch: (matchId: string, status: string, actor: string) => request<{ id: string; recommendation_status: string }>(`/api/v1/matches/${matchId}`, { method: "PATCH", body: JSON.stringify({ status, actor }) }),
+  decideMatch: (matchId: string, status: string, actor: string) => request<{ id: string; recommendation_status: string; recommendation_draft: RecommendationDraft | null }>(`/api/v1/matches/${matchId}`, { method: "PATCH", body: JSON.stringify({ status, actor }) }),
+  recommendationDraft: (matchId: string) => request<RecommendationDraft>(`/api/v1/matches/${matchId}/recommendation-draft`),
+  sendContact: (payload: { channel: "gmail" | "zalo" | "phone"; candidate_id?: string; company_id?: string; recipient?: string; subject?: string; body: string; human_approved_by: string }) => request<{ id: string; delivery_status: string; delivery_error: string | null }>("/api/v1/contacts", { method: "POST", body: JSON.stringify(payload) }),
   actions: (role = "", status = "") => request<ActionItem[]>(`/api/v1/actions?role=${encodeURIComponent(role)}&status=${encodeURIComponent(status)}`),
   updateAction: (actionId: string, status: string, actor: string) => request<ActionItem>(`/api/v1/actions/${actionId}`, { method: "PATCH", body: JSON.stringify({ status, actor }) }),
   integrations: () => request<Integration[]>("/api/v1/integrations"),
