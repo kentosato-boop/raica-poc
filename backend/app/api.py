@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import base64
@@ -236,6 +237,8 @@ def revival(role: str = "ra", owner: str | None = None, db: Session = Depends(ge
 def candidates(
     q: str | None = Query(default=None, max_length=100),
     candidate_status: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     statement = select(Candidate)
@@ -255,7 +258,7 @@ def candidates(
             )
             for term in terms
         ]))
-    items = db.scalars(statement.order_by(Candidate.last_contact_date.desc(), Candidate.name)).all()
+    items = db.scalars(statement.order_by(Candidate.last_contact_date.desc(), Candidate.name).limit(limit).offset(offset)).all()
     payload = [candidate_dict(item) for item in items]
     if q:
         query = q.casefold()
@@ -280,15 +283,21 @@ def candidate_detail(candidate_id: str, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/candidates/{candidate_id}/skill-sheet")
-async def upload_skill_sheet(candidate_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> dict:
+async def upload_skill_sheet(
+    candidate_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
     candidate = db.get(Candidate, candidate_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="candidate not found")
     content = await file.read()
     if len(content) > 8 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="skill sheet must be 8MB or smaller")
+    safe_filename = Path(file.filename or "skill-sheet").name
     try:
-        text = extract_text(file.filename or "skill-sheet", content)
+        text = extract_text(safe_filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     analysis = analyze_skill_sheet(text)
@@ -296,16 +305,19 @@ async def upload_skill_sheet(candidate_id: str, file: UploadFile = File(...), db
     if analysis["specialization"]:
         candidate.specialization = str(analysis["specialization"])
     candidate.specialization_years = max(candidate.specialization_years or 0, float(analysis["specialization_years"]))
-    candidate.skill_sheet_filename = file.filename
-    suffix = Path(file.filename or "skill-sheet.txt").suffix.lower()
-    storage_dir = Path(__file__).resolve().parents[2] / "data" / "skill_sheets"
+    candidate.skill_sheet_filename = safe_filename
+    suffix = Path(safe_filename).suffix.lower()
+    storage_dir = Path(settings.skill_sheet_storage_dir).resolve()
     storage_dir.mkdir(parents=True, exist_ok=True)
     storage_path = storage_dir / f"{candidate.id}{suffix}"
+    previous_path = Path(candidate.skill_sheet_path) if candidate.skill_sheet_path else None
     storage_path.write_bytes(content)
+    if previous_path and previous_path != storage_path and previous_path.exists() and previous_path.parent == storage_dir:
+        previous_path.unlink()
     candidate.skill_sheet_path = str(storage_path)
     candidate.skill_sheet_uploaded_at = datetime.now(timezone.utc)
     candidate.skill_sheet_text = text[:50000]
-    db.add(AuditLog(actor=candidate.ca_owner, action="candidate.skill_sheet.upload", entity_type="candidate", entity_id=candidate.id, details={"filename": file.filename, "skills": analysis["skills"]}))
+    db.add(AuditLog(actor=candidate.ca_owner, action="candidate.skill_sheet.upload", entity_type="candidate", entity_id=candidate.id, details={"filename": safe_filename, "sha256": hashlib.sha256(content).hexdigest(), "skills": analysis["skills"]}))
     db.commit()
     db.refresh(candidate)
     return {"candidate": candidate_dict(candidate), "analysis": analysis}
@@ -333,8 +345,16 @@ def candidate_matches(candidate_id: str, db: Session = Depends(get_db)) -> list[
 
 
 @router.get("/jobs")
-def jobs(q: str | None = Query(default=None, max_length=100), db: Session = Depends(get_db)) -> list[dict]:
+def jobs(
+    q: str | None = Query(default=None, max_length=100),
+    include_closed: bool = False,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[dict]:
     statement = select(Job).options(selectinload(Job.company)).order_by(Job.received_date.desc())
+    if not include_closed:
+        statement = statement.where(Job.status != "closed")
     if q:
         terms = [term for term in q.strip().split() if term]
         statement = statement.join(Company).where(and_(*[
@@ -354,7 +374,7 @@ def jobs(q: str | None = Query(default=None, max_length=100), db: Session = Depe
             )
             for term in terms
         ]))
-    items = db.scalars(statement).all()
+    items = db.scalars(statement.limit(limit).offset(offset)).all()
     payload = [job_dict(item) for item in items]
     if q:
         query = q.casefold()

@@ -18,18 +18,41 @@ SKILL_ALIASES = {
     "5s": ("5s", "整理整頓"),
     "interpretation": ("通訳", "interpreter", "interpretation"),
     "administration": ("総務", "administration"),
+    "accounting": ("accounting", "会計", "経理"),
+    "frontend": ("frontend", "フロントエンド"),
+    "react": ("react",),
+    "typescript": ("typescript",),
+    "sql": (" sql ", "postgresql", "mysql"),
+    "azure": ("azure", "data factory"),
+    "data_engineering": ("data engineer", "data engineering", "データ基盤"),
+    "production_planning": ("production planning", "生産計画"),
+    "inventory": ("inventory", "在庫管理"),
+    "sap": (" sap ",),
 }
 
 
 def extract_text(filename: str, content: bytes) -> str:
     suffix = Path(filename).suffix.lower()
     if suffix == ".pdf":
-        return "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(content)).pages)
+        if not content.startswith(b"%PDF-"):
+            raise ValueError("PDFの内容を確認できません。正しいPDFを選択してください")
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(content)).pages)
+        if not text.strip():
+            raise ValueError("画像PDFは未対応です。OCR済みPDFまたはDOCXを登録してください")
+        return text
     if suffix == ".docx":
+        if not content.startswith(b"PK"):
+            raise ValueError("DOCXの内容を確認できません。正しいDOCXを選択してください")
         document = Document(io.BytesIO(content))
-        return "\n".join(paragraph.text for paragraph in document.paragraphs)
+        text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+        if not text.strip():
+            raise ValueError("本文が空のDOCXは登録できません")
+        return text
     if suffix in {".txt", ".md", ".csv"}:
-        return content.decode("utf-8", errors="replace")
+        text = content.decode("utf-8", errors="replace")
+        if not text.strip():
+            raise ValueError("本文が空のファイルは登録できません")
+        return text
     raise ValueError("PDF、DOCX、TXT、MD、CSVに対応しています")
 
 

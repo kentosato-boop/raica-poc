@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models
 from .api import router
-from .config import get_settings
+from .config import get_settings, validate_runtime_settings
 from .database import Base, SessionLocal, engine
 from .matching import run_matching
 from .models import Job
@@ -22,12 +22,16 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    validate_runtime_settings(settings)
+    if settings.bootstrap_schema_enabled:
+        Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
-        seed_database(db)
-        for job in db.query(Job).all():
-            if job.status != "closed":
-                run_matching(db, job.id, "startup")
+        if settings.demo_seed_enabled:
+            seed_database(db)
+        if settings.startup_matching_enabled:
+            for job in db.query(Job).all():
+                if job.status != "closed":
+                    run_matching(db, job.id, "startup")
     yield
 
 
@@ -36,6 +40,8 @@ app = FastAPI(
     version="2.0.0",
     description="RA/CA workflow API with matching, integration outbox, and audit trail.",
     lifespan=lifespan,
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
 )
 app.add_middleware(
     CORSMiddleware,

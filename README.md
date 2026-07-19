@@ -67,6 +67,13 @@ PostgreSQLの永続ボリュームを使用し、ビルド済みフロントをF
 
 接続先が未設定・障害中でもイベントは`outbox_events`へ残り、画面から再送できます。
 
+## 環境別の安全設定
+
+- ローカル開発では`RAICA_DEMO_SEED_ENABLED=true`でサンプルデータを投入できます。
+- Docker/PostgreSQLでは起動前に`alembic upgrade head`を実行し、デモデータと起動時の全件再計算は既定で無効です。
+- スキルシートは`RAICA_SKILL_SHEET_STORAGE_DIR`へ保存し、Dockerでは専用ボリュームへ永続化します。
+- `RAICA_ENVIRONMENT=production`では`RAICA_API_KEY`が未設定だと起動しません。本番のブラウザ利用はAPIキー直埋めではなく、OIDC対応の社内ゲートウェイ配下に置いてください。
+
 ## API
 
 | Method | Path | 内容 |

@@ -83,12 +83,16 @@ def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]
     if not job or job.status == "closed":
         raise ValueError("job not found or closed")
     candidates = db.scalars(select(Candidate).where(Candidate.status != "dormant")).all()
+    existing = {
+        item.candidate_id: item
+        for item in db.scalars(select(Match).where(Match.job_id == job.id)).all()
+    }
     generated: list[Match] = []
     for candidate in candidates:
         values = score_candidate(candidate, job)
         if int(values["score"]) < 70:
             continue
-        current = db.scalar(select(Match).where(Match.candidate_id == candidate.id, Match.job_id == job.id))
+        current = existing.get(candidate.id)
         if not current:
             current = Match(id=f"match-{job.id}-{candidate.id}", candidate_id=candidate.id, job_id=job.id, score=0, skill_score=0, experience_score=0, japanese_score=0, salary_score=0, commute_score=0, age_score=0, remote_score=0, specialization_score=0, stability_score=0, similarity_pct=0, ng_check="", evidence_quote="")
             db.add(current)
@@ -106,8 +110,14 @@ def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]
         current.ng_check = str(values["ng_check"])
         current.evidence_quote = str(values["evidence_quote"])
         generated.append(current)
+    generated_ids = {item.candidate_id for item in generated}
+    removed = 0
+    for candidate_id, current in existing.items():
+        if candidate_id not in generated_ids and current.recommendation_status == "shortlisted":
+            db.delete(current)
+            removed += 1
     job.ai_candidate_count = len(generated)
-    db.add(AuditLog(actor=actor, action="matching.run", entity_type="job", entity_id=job.id, details={"generated": len(generated), "weights": WEIGHTS, "date": date.today().isoformat()}))
+    db.add(AuditLog(actor=actor, action="matching.run", entity_type="job", entity_id=job.id, details={"generated": len(generated), "removed_stale": removed, "weights": WEIGHTS, "date": date.today().isoformat()}))
     db.commit()
     for item in generated:
         db.refresh(item)

@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = f"sqlite:///{ROOT / 'data' / 'raica.sqlite3'}"
     api_key: str | None = None
-    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000"
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8000,http://127.0.0.1:8001"
+    bootstrap_schema_enabled: bool = True
+    demo_seed_enabled: bool = True
+    startup_matching_enabled: bool = True
+    skill_sheet_storage_dir: str = str(ROOT / "data" / "skill_sheets")
 
     porters_candidates_url: str | None = None
     porters_jobs_url: str | None = None
@@ -47,7 +51,16 @@ class Settings(BaseSettings):
     def gmail_configured(self) -> bool:
         return bool(self.gmail_access_token and self.gmail_sender) or bool(self.gmail_webhook_url)
 
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() in {"production", "prod"}
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def validate_runtime_settings(settings: Settings) -> None:
+    if settings.is_production and not settings.api_key:
+        raise RuntimeError("RAICA_API_KEY is required in production")

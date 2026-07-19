@@ -16,16 +16,25 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(path, { headers: API_KEY ? { "X-RAICA-Key": API_KEY } : {} });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || `HTTP ${response.status}`);
+  }
+  return response.blob();
+}
+
 export const api = {
   health: () => request<{ ok: boolean; version: string; environment: string }>("/health"),
   dashboard: (role = "ra", owner = "") => request<DashboardData>(`/api/v1/dashboard?role=${encodeURIComponent(role)}&owner=${encodeURIComponent(owner)}`),
   candidates: (query = "", status = "") => request<Candidate[]>(`/api/v1/candidates?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`),
   candidate: (candidateId: string) => request<Candidate>(`/api/v1/candidates/${candidateId}`),
   uploadSkillSheet: (candidateId: string, file: File) => { const form = new FormData(); form.append("file", file); return request<{ candidate: Candidate; analysis: { skills: string[]; specialization: string | null; specialization_years: number } }>(`/api/v1/candidates/${candidateId}/skill-sheet`, { method: "POST", body: form }); },
-  skillSheetUrl: (candidateId: string) => `/api/v1/candidates/${candidateId}/skill-sheet`,
+  downloadSkillSheet: (candidateId: string) => requestBlob(`/api/v1/candidates/${candidateId}/skill-sheet`),
   candidateMatches: (candidateId: string) => request<MatchItem[]>(`/api/v1/candidates/${candidateId}/matches`),
   revival: (role: "ra" | "ca", owner: string) => request<RevivalData>(`/api/v1/revival?role=${encodeURIComponent(role)}&owner=${encodeURIComponent(owner)}`),
-  jobs: (query = "") => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}`),
+  jobs: (query = "", includeClosed = false) => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}&include_closed=${includeClosed}`),
   matches: (jobId: string) => request<MatchItem[]>(`/api/v1/jobs/${jobId}/matches`),
   rerunMatches: (jobId: string, actor: string) => request<{ generated: number; matches: MatchItem[] }>(`/api/v1/jobs/${jobId}/matches/run`, { method: "POST", body: JSON.stringify({ actor }) }),
   decideMatch: (matchId: string, status: string, actor: string) => request<{ id: string; recommendation_status: string; recommendation_draft: RecommendationDraft | null }>(`/api/v1/matches/${matchId}`, { method: "PATCH", body: JSON.stringify({ status, actor }) }),

@@ -15,4 +15,4 @@ COPY --from=frontend /build/frontend/dist /app/frontend/dist
 COPY data/ /app/data/
 ENV PYTHONPATH=/app/backend
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "cd /app/backend && alembic upgrade head && exec uvicorn app.main:app --app-dir /app/backend --host 0.0.0.0 --port 8000"]

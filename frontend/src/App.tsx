@@ -57,9 +57,9 @@ export default function App() {
   const loadDashboard = useCallback(async () => {
     try { setDashboard(await api.dashboard(role, actor)); } catch (error) { notify((error as Error).message, "error"); }
   }, [actor, notify, role]);
-  const loadJobs = useCallback(async (query = "") => {
+  const loadJobs = useCallback(async (query = "", includeClosed = false) => {
     try {
-      const result = await api.jobs(query);
+      const result = await api.jobs(query, includeClosed);
       setJobs(result);
       setSelectedJobId(current => result.some(item => item.id === current) ? current : result[0]?.id || "");
     } catch (error) { notify((error as Error).message, "error"); }
@@ -103,6 +103,17 @@ export default function App() {
       notify(`${file.name}: ${result.analysis.skills.length} skills imported`);
     } catch (error) { notify((error as Error).message, "error"); } finally { setUploading(false); }
   };
+  const downloadSkillSheet = async (candidate: Candidate) => {
+    try {
+      const blob = await api.downloadSkillSheet(candidate.id);
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = candidate.skill_sheet_filename || `${candidate.id}-skill-sheet`;
+      link.click();
+      URL.revokeObjectURL(href);
+    } catch (error) { notify((error as Error).message, "error"); }
+  };
   const loadCandidateMatches = async () => {
     if (!selectedCandidate) return;
     try { setCandidateMatches(await api.candidateMatches(selectedCandidate.id)); }
@@ -110,7 +121,7 @@ export default function App() {
   };
   const openRevivalTarget = async (item: RevivalItem) => {
     if (item.kind === "company") {
-      setSearch(item.name); await loadJobs(item.name); setView("jobs"); return;
+      setSearch(item.name); await loadJobs(item.name, true); setView("jobs"); return;
     }
     try { const candidate = await api.candidate(item.target_id); setSelectedCandidate(candidate); setCandidates([candidate]); setView("candidates"); }
     catch (error) { notify((error as Error).message, "error"); }
@@ -151,7 +162,7 @@ export default function App() {
         <Topbar role={role} onRole={setRole} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} />
         <main className="main-content"><Suspense fallback={<div className="view-loading" aria-label="読み込み中"><i /><span>Loading</span></div>}>
           {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} />}
-          {view === "candidates" && <CandidatesView role={role} search={search} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} uploading={uploading} />}
+          {view === "candidates" && <CandidatesView role={role} search={search} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} onDownload={downloadSkillSheet} uploading={uploading} />}
           {view === "jobs" && <JobsView role={role} search={search} jobs={jobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "matching" && <MatchingView jobs={jobs} selectedJobId={selectedJobId} onJob={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "revival" && <RevivalView role={role} data={revival} onOpen={openRevivalTarget} />}

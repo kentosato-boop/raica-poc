@@ -20,9 +20,16 @@ services:
     environment:
       RAICA_ENVIRONMENT: docker
       RAICA_DATABASE_URL: postgresql+psycopg://raica:raica-local@db:5432/raica
+      RAICA_BOOTSTRAP_SCHEMA_ENABLED: "false"
+      RAICA_DEMO_SEED_ENABLED: "false"
+      RAICA_STARTUP_MATCHING_ENABLED: "false"
+      RAICA_SKILL_SHEET_STORAGE_DIR: /app/data/skill_sheets
+    volumes:
+      - raica-skill-sheets:/app/data/skill_sheets
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   raica-postgres:
+  raica-skill-sheets:

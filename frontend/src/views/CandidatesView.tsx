@@ -1,6 +1,5 @@
 import { BriefcaseBusiness, ExternalLink, FileText, FileUp, MapPin, Sparkles } from "lucide-react";
 import { useRef } from "react";
-import { api } from "../api";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { useI18n } from "../i18n";
@@ -13,10 +12,10 @@ const statusLabels: Record<string, Record<string, string>> = {
 };
 const workLabels: Record<string, string> = { remote: "リモート", onsite: "常駐", hybrid: "ハイブリッド", flexible: "相談可" };
 
-export function CandidatesView({ role, search, candidates, selected, onSelect, status, onStatus, matches, onLoadMatches, onUpload, uploading }: {
+export function CandidatesView({ role, search, candidates, selected, onSelect, status, onStatus, matches, onLoadMatches, onUpload, onDownload, uploading }: {
   role: "ra" | "ca"; search: string; candidates: Candidate[]; selected: Candidate | null; onSelect: (candidate: Candidate) => void;
   status: string; onStatus: (status: string) => void; matches: MatchItem[]; onLoadMatches: () => void;
-  onUpload: (file: File) => void; uploading: boolean;
+  onUpload: (file: File) => void; onDownload: (candidate: Candidate) => void; uploading: boolean;
 }) {
   const { t, locale } = useI18n();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -39,7 +38,7 @@ export function CandidatesView({ role, search, candidates, selected, onSelect, s
         <td>{candidate.current_salary_million ? `${candidate.current_salary_million}M` : "—"}</td><td>{candidate.desired_salary_million ? `${candidate.desired_salary_million}M` : "—"}</td>
         <td><div className="inline-tags">{(candidate.work_style_options?.length ? candidate.work_style_options : [candidate.work_style]).map(mode => <span key={mode}>{workLabels[mode] || mode}</span>)}</div></td>
         <td><Badge tone="info">{candidate.internal_parallel_count}</Badge></td><td><Badge tone="warning">{candidate.external_parallel_count}</Badge></td>
-        <td>{candidate.skill_sheet_filename ? <a className="file-link" href={api.skillSheetUrl(candidate.id)} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}><FileText size={14} /><span>{candidate.skill_sheet_filename}</span><ExternalLink size={12} /></a> : <span className="muted-cell">未登録</span>}</td>
+        <td>{candidate.skill_sheet_filename ? <button className="file-link" onClick={event => { event.stopPropagation(); onDownload(candidate); }}><FileText size={14} /><span>{candidate.skill_sheet_filename}</span><ExternalLink size={12} /></button> : <span className="muted-cell">未登録</span>}</td>
       </tr>)}</tbody></table></div> : <EmptyState title="該当する候補者はいません" body="検索条件を変更してください。" />}
     </section>
     {selected && <section className="surface record-detail" aria-live="polite">

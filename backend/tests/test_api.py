@@ -2,25 +2,30 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 TEST_DIR = tempfile.TemporaryDirectory()
 DB_PATH = Path(TEST_DIR.name) / "raica-test.sqlite3"
 os.environ["RAICA_DATABASE_URL"] = f"sqlite:///{DB_PATH}"
+os.environ["RAICA_SKILL_SHEET_STORAGE_DIR"] = str(Path(TEST_DIR.name) / "skill_sheets")
 os.environ.pop("RAICA_API_KEY", None)
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
+from app.config import Settings, validate_runtime_settings  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Application, Candidate, OutboxEvent  # noqa: E402
+from app.matching import run_matching  # noqa: E402
+from app.models import Application, Candidate, Company, Job, Match, OutboxEvent  # noqa: E402
 
 
 def test_health_and_dashboard():
     with TestClient(app) as client:
         assert client.get("/health").json()["ok"] is True
         dashboard = client.get("/api/v1/dashboard").json()
-        assert dashboard["counts"]["candidates"] == 10
-        assert dashboard["counts"]["open_jobs"] == 8
+        assert dashboard["counts"]["candidates"] == 12
+        assert dashboard["counts"]["open_jobs"] == 10
         assert dashboard["counts"]["open_actions"] == 11
         assert dashboard["counts"]["recommendations"] >= 1
         assert dashboard["counts"]["closed_won"] == 1
@@ -28,6 +33,17 @@ def test_health_and_dashboard():
         assert dashboard["targets"]["recommendations"] == 20
         assert dashboard["my_actions"]
         assert dashboard["waiting_actions"]
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(Candidate)) == 12
+        assert db.scalar(select(func.count()).select_from(Company)) == 10
+        assert db.scalar(select(func.count()).select_from(Job)) == 13
+
+
+def test_production_requires_api_key():
+    settings = Settings(environment="production", api_key=None, _env_file=None)
+    with pytest.raises(RuntimeError, match="RAICA_API_KEY"):
+        validate_runtime_settings(settings)
+    validate_runtime_settings(Settings(environment="production", api_key="test-key", _env_file=None))
 
 
 def test_role_specific_revival_data():
@@ -43,7 +59,7 @@ def test_role_specific_revival_data():
         assert all(item["job_title"] for item in ca["items"])
         assert {item["job_id"] for item in ca["items"]} == {"job-d-accountant", "job-f-frontend"}
         assert all(item["priority_score"] >= 80 for item in ca["items"])
-        historical_jobs = client.get("/api/v1/jobs", params={"q": "G社"}).json()
+        historical_jobs = client.get("/api/v1/jobs", params={"q": "G社", "include_closed": True}).json()
         assert [job["id"] for job in historical_jobs] == ["job-g-dormant"]
         assert historical_jobs[0]["status"] == "closed"
 
@@ -53,8 +69,8 @@ def test_candidate_search_and_job_matching():
         candidates = client.get("/api/v1/candidates", params={"q": "CNC"}).json()
         assert [candidate["id"] for candidate in candidates] == ["cand-huy"]
         python_candidates = client.get("/api/v1/candidates", params={"q": "Python"}).json()
-        assert [candidate["id"] for candidate in python_candidates] == ["cand-quan"]
-        assert python_candidates[0]["search_match"] == "登録スキル"
+        assert {candidate["id"] for candidate in python_candidates} == {"cand-quan", "cand-yen"}
+        assert all(candidate["search_match"] == "登録スキル" for candidate in python_candidates)
         result = client.post("/api/v1/jobs/job-c-cnc/matches/run", json={"actor": "pytest"})
         assert result.status_code == 201
         payload = result.json()
@@ -65,6 +81,20 @@ def test_candidate_search_and_job_matching():
         assert {"age", "remote", "specialization", "stability"}.issubset(payload["matches"][0]["scores"])
         reverse_matches = client.get("/api/v1/candidates/cand-huy/matches").json()
         assert reverse_matches[0]["job_id"] == "job-c-cnc"
+
+
+def test_rerun_removes_only_stale_shortlists():
+    with TestClient(app):
+        with SessionLocal() as db:
+            candidate = db.get(Candidate, "cand-huy")
+            candidate.status = "dormant"
+            db.commit()
+            run_matching(db, "job-c-cnc", "pytest")
+            stale = db.scalar(select(Match).where(Match.job_id == "job-c-cnc", Match.candidate_id == "cand-huy"))
+            assert stale is None
+            candidate.status = "active"
+            db.commit()
+            run_matching(db, "job-c-cnc", "pytest-restore")
 
 
 def test_match_approval_persists_application():
@@ -126,11 +156,17 @@ def test_job_search_and_skill_sheet_upload():
         assert [candidate["id"] for candidate in skill_sheet_results] == ["cand-quan"]
         assert skill_sheet_results[0]["search_match"] == "スキルシート"
         factory_jobs = client.get("/api/v1/jobs", params={"q": "工場"}).json()
-        assert {job["company_name"] for job in factory_jobs} >= {"A社", "G社"}
+        assert {job["company_name"] for job in factory_jobs} >= {"A社", "I社"}
+        assert "G社" not in {job["company_name"] for job in factory_jobs}
         assert all(job["search_match"] == "企業採用情報" for job in factory_jobs)
         download = client.get("/api/v1/candidates/cand-quan/skill-sheet")
         assert download.status_code == 200
         assert download.content == b"Python backend engineer 5 years FastAPI"
+        invalid_pdf = client.post(
+            "/api/v1/candidates/cand-quan/skill-sheet",
+            files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")},
+        )
+        assert invalid_pdf.status_code == 422
 
 
 def test_porters_sync_upserts_api_records(monkeypatch):
