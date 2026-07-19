@@ -106,6 +106,33 @@ export interface MatchItem {
   updated_at: string;
 }
 
+export interface RevivalItem {
+  id: string;
+  kind: "company" | "candidate";
+  name: string;
+  owner: string;
+  primary_label: string;
+  secondary_label: string;
+  last_contact_date: string | null;
+  dormant_days: number;
+  priority_score: number;
+  status: string;
+  signal: string | null;
+  reason: string | null;
+  recommendation: string;
+  channel: string;
+  target_id: string;
+  job_id?: string | null;
+  job_title?: string | null;
+  company_name?: string | null;
+}
+
+export interface RevivalData {
+  role: "ra" | "ca";
+  mode: "company_job_revival" | "candidate_job_revival";
+  items: RevivalItem[];
+}
+
 export interface ActionItem {
   id: string;
   owner_role: "ra" | "ca";
