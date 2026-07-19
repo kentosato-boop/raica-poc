@@ -9,17 +9,28 @@ from .models import AuditLog, Candidate, Job, Match
 
 
 JLPT_LEVEL = {None: 0, "": 0, "N5": 1, "N4": 2, "N3": 3, "N2": 4, "N1": 5}
+# RA/CA 実務では「コア適合（スキル + 専門）」が推薦可否のゲートであり、
+# 年収・通勤・年齢などの soft 要因はタイブレーク。重みはこの階層を反映する。
 WEIGHTS = {
-    "skill": 0.20,
+    "skill": 0.24,
+    "specialization": 0.22,
     "experience": 0.12,
     "japanese": 0.10,
-    "salary": 0.08,
-    "commute": 0.07,
-    "age": 0.08,
-    "remote": 0.10,
-    "specialization": 0.15,
-    "stability": 0.10,
+    "stability": 0.08,
+    "remote": 0.08,
+    "age": 0.06,
+    "salary": 0.06,
+    "commute": 0.04,
 }
+# コア適合の内訳（合計 1.0）。skill は具体的な一致スキル、specialization は専門領域の深さ。
+CORE_SKILL_WEIGHT = 0.55
+CORE_SPECIALIZATION_WEIGHT = 0.45
+# AI は 100% の確度を主張しない。上限は 98。
+SCORE_CAP = 98
+# 天井 = CEILING_BASE + CEILING_SLOPE * core_fit。
+# soft 要因だけが満点でも、コア適合が低ければ推薦帯（70+）には届かない。
+CEILING_BASE = 55
+CEILING_SLOPE = 0.43
 
 
 def score_candidate(candidate: Candidate, job: Job) -> dict[str, int | str]:
@@ -61,15 +72,20 @@ def score_candidate(candidate: Candidate, job: Job) -> dict[str, int | str]:
         "specialization": specialization,
         "stability": stability,
     }
-    score = min(96, round(sum(int(axes[key]) * weight for key, weight in WEIGHTS.items())))
+    core_fit = round(CORE_SKILL_WEIGHT * skill + CORE_SPECIALIZATION_WEIGHT * specialization)
+    weighted = sum(int(axes[key]) * weight for key, weight in WEIGHTS.items())
+    ceiling = CEILING_BASE + CEILING_SLOPE * core_fit
+    score = min(round(weighted), round(ceiling), SCORE_CAP)
     issues = [key for key, value in axes.items() if int(value) < 75]
     shared = sorted(required & actual)
     return {
         **axes,
         "score": score,
-        "similarity_pct": min(98, round(score * 0.9 + len(shared) * 4)),
+        "core_fit": core_fit,
+        "similarity_pct": min(SCORE_CAP, round(score * 0.9 + len(shared) * 4)),
         "ng_check": "要件ずらし: " + ", ".join(issues) if issues else "主要条件にNGパターンなし",
         "evidence_quote": (
+            f"コア適合 {core_fit}% / "
             f"一致スキル: {', '.join(shared) if shared else 'なし'} / "
             f"専門: {candidate.specialization or '未登録'} {candidate.specialization_years:g}年 / "
             f"直近勤続 {candidate.recent_tenure_years:g}年 / "
