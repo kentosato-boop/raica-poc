@@ -1,71 +1,55 @@
-import { BriefcaseBusiness, CalendarClock, ChevronRight, FileUp, MapPin, Sparkles } from "lucide-react";
+import { BriefcaseBusiness, ExternalLink, FileText, FileUp, MapPin, Sparkles } from "lucide-react";
 import { useRef } from "react";
+import { api } from "../api";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { useI18n } from "../i18n";
-import type { Candidate } from "../types";
+import type { Candidate, MatchItem } from "../types";
 
 const statusLabels: Record<string, Record<string, string>> = {
   ja: { active: "活動中", process: "選考中", dormant: "休眠" },
-  vi: { active: "Đang hoạt động", process: "Đang tuyển chọn", dormant: "Ngủ" },
+  vi: { active: "Đang hoạt động", process: "Đang tuyển chọn", dormant: "Tạm nghỉ" },
   en: { active: "Active", process: "In process", dormant: "Dormant" },
 };
+const workLabels: Record<string, string> = { remote: "リモート", onsite: "常駐", hybrid: "ハイブリッド", flexible: "相談可" };
 
-export function CandidatesView({ candidates, selected, onSelect, status, onStatus, onMatching, onUpload, uploading }: { candidates: Candidate[]; selected: Candidate | null; onSelect: (candidate: Candidate) => void; status: string; onStatus: (status: string) => void; onMatching: () => void; onUpload: (file: File) => void; uploading: boolean }) {
+export function CandidatesView({ role, candidates, selected, onSelect, status, onStatus, matches, onLoadMatches, onUpload, uploading }: {
+  role: "ra" | "ca"; candidates: Candidate[]; selected: Candidate | null; onSelect: (candidate: Candidate) => void;
+  status: string; onStatus: (status: string) => void; matches: MatchItem[]; onLoadMatches: () => void;
+  onUpload: (file: File) => void; uploading: boolean;
+}) {
   const { t, locale } = useI18n();
   const fileInput = useRef<HTMLInputElement>(null);
-  return (
-    <div className="view-stack">
-      <div className="page-heading compact-heading">
-        <div><span className="eyebrow">{t("database")}</span><h1>{t("candidates")}</h1></div>
-        <button className="button secondary" disabled={!selected || uploading} onClick={() => fileInput.current?.click()}><FileUp size={16} />{uploading ? "..." : t("upload")}</button>
-        <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={event => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
-      </div>
-      <div className="filter-toolbar">
-        <div className="segmented compact">
-          {["", "active", "process", "dormant"].map(value => <button key={value || "all"} className={status === value ? "selected" : ""} onClick={() => onStatus(value)}>{value ? statusLabels[locale][value] : t("all")}</button>)}
-        </div>
-        <span>{candidates.length}</span>
-      </div>
-      <div className="master-detail candidate-layout">
-        <section className="surface table-surface">
-          {candidates.length ? (
-            <div className="table-scroll"><table className="data-table"><thead><tr><th>{t("candidates")}</th><th>{t("specialty")}</th><th>{t("internalParallel")} / {t("externalParallel")}</th><th>{t("skillSheet")}</th><th /></tr></thead><tbody>
-              {candidates.map(candidate => (
-                <tr key={candidate.id} className={selected?.id === candidate.id ? "selected-row" : ""} onClick={() => onSelect(candidate)}>
-                  <td><div className="person-cell"><div className="person-avatar">{candidate.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{candidate.name}</strong><small>{candidate.role_title} · {candidate.years_experience}年</small></div></div></td>
-                  <td><strong className="cell-title">{candidate.specialization || candidate.role_title}</strong><small>{candidate.specialization_years}年 · {candidate.remote_preference}</small></td>
-                  <td><div className="parallel-counts"><Badge tone="info">{candidate.internal_parallel_count}</Badge><Badge tone="warning">{candidate.external_parallel_count}</Badge></div></td>
-                  <td>{candidate.skill_sheet_filename ? <Badge tone="success">{candidate.skill_sheet_filename}</Badge> : <span className="muted-cell">—</span>}</td>
-                  <td><button className="button secondary small detail-button" onClick={event => { event.stopPropagation(); onSelect(candidate); }}>{t("details")}<ChevronRight size={14} /></button></td>
-                </tr>
-              ))}
-            </tbody></table></div>
-          ) : <EmptyState title="No results" body="Search or filter conditions can be changed." />}
-        </section>
-        <aside className="inspector candidate-inspector">
-          {selected ? <>
-            <div className="inspector-person"><div className="person-avatar large">{selected.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><h2>{selected.name}</h2><p>{selected.role_title} · {selected.porters_id}</p></div></div>
-            <div className="inspector-status"><Badge tone={statusTone(selected.status)}>{statusLabels[locale][selected.status] ?? selected.status}</Badge><span>{selected.ca_owner}</span></div>
-            <dl className="detail-list">
-              <div><dt>{t("specialty")}</dt><dd>{selected.specialization || "—"}</dd></div>
-              <div><dt>{t("specialtyYears")}</dt><dd>{selected.specialization_years}年</dd></div>
-              <div><dt>{t("recentTenure")}</dt><dd>{selected.recent_tenure_years}年</dd></div>
-              <div><dt>{t("remote")}</dt><dd>{selected.remote_preference}</dd></div>
-              <div><dt>年齢 / 日本語</dt><dd>{selected.age ?? "—"} / {selected.jlpt ?? "—"}</dd></div>
-              <div><dt>希望給与</dt><dd>{selected.desired_salary_million ? `${selected.desired_salary_million}M VND` : "—"}</dd></div>
-              <div><dt>通勤許容</dt><dd><MapPin size={14} />{selected.commute_minutes ?? "—"}分</dd></div>
-              <div><dt>平均反応</dt><dd><CalendarClock size={14} />{selected.avg_response_days ?? "—"}日</dd></div>
-            </dl>
-            <div className="parallel-summary"><div><span>{t("internalParallel")}</span><strong>{selected.internal_parallel_count}</strong></div><div><span>{t("externalParallel")}</span><strong>{selected.external_parallel_count}</strong></div></div>
-            <div className="process-list">{selected.current_processes.length ? selected.current_processes.map((process, index) => <div key={`${process.label}-${index}`}><BriefcaseBusiness size={14} /><span><strong>{process.label}</strong><small>{process.scope === "internal" ? t("internalParallel") : t("externalParallel")} · {process.stage}</small></span></div>) : <span className="muted-cell">並行選考なし</span>}</div>
-            <div className="skill-cloud">{selected.skills.map(skill => <span key={skill}>{skill}</span>)}</div>
-            <div className="skill-sheet-state"><FileUp size={15} /><span><strong>{selected.skill_sheet_filename || t("noAttachment")}</strong><small>{selected.skill_sheet_uploaded_at ? new Date(selected.skill_sheet_uploaded_at).toLocaleDateString(locale) : ""}</small></span></div>
-            <div className="note-box"><strong>{t("caMemo")}</strong><p>{selected.notes || "—"}</p></div>
-            <button className="button primary full" onClick={onMatching}><Sparkles size={16} />{t("findMatches")}</button>
-          </> : <EmptyState title={t("details")} body="Select a candidate." />}
-        </aside>
-      </div>
+  return <div className="view-stack">
+    <div className="page-heading compact-heading">
+      <div><span className="eyebrow">TALENT DATABASE</span><h1>{t("candidates")}</h1><p>候補者情報・並行状況・スキルシートを一覧で確認</p></div>
+      <button className="button secondary" disabled={!selected || uploading} onClick={() => fileInput.current?.click()}><FileUp size={16} />{uploading ? "取込中" : "スキルシート登録"}</button>
+      <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={event => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
     </div>
-  );
+    <div className="filter-toolbar">
+      <div className="segmented compact">{["", "active", "process", "dormant"].map(value => <button key={value || "all"} className={status === value ? "selected" : ""} onClick={() => onStatus(value)}>{value ? statusLabels[locale][value] : t("all")}</button>)}</div>
+      <span>{candidates.length}名</span>
+    </div>
+    <section className="surface table-surface database-surface">
+      {candidates.length ? <div className="table-scroll"><table className="data-table database-table"><thead><tr>
+        <th>候補者</th><th>専門領域</th><th>業務経験</th><th>年齢</th><th>現年収</th><th>希望年収</th><th>勤務形態</th><th>社内並行</th><th>社外並行</th><th>スキルシート</th>
+      </tr></thead><tbody>{candidates.map(candidate => <tr key={candidate.id} className={selected?.id === candidate.id ? "selected-row" : ""} onClick={() => onSelect(candidate)}>
+        <td><div className="person-cell"><div className="person-avatar">{candidate.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{candidate.name}</strong><small>{candidate.role_title} · {candidate.ca_owner}</small></div></div></td>
+        <td><strong>{candidate.specialization || candidate.role_title}</strong></td><td>{candidate.specialization_years}年</td><td>{candidate.age ?? "—"}歳</td>
+        <td>{candidate.current_salary_million ? `${candidate.current_salary_million}M` : "—"}</td><td>{candidate.desired_salary_million ? `${candidate.desired_salary_million}M` : "—"}</td>
+        <td><div className="inline-tags">{(candidate.work_style_options?.length ? candidate.work_style_options : [candidate.work_style]).map(mode => <span key={mode}>{workLabels[mode] || mode}</span>)}</div></td>
+        <td><Badge tone="info">{candidate.internal_parallel_count}</Badge></td><td><Badge tone="warning">{candidate.external_parallel_count}</Badge></td>
+        <td>{candidate.skill_sheet_filename ? <a className="file-link" href={api.skillSheetUrl(candidate.id)} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}><FileText size={14} /><span>{candidate.skill_sheet_filename}</span><ExternalLink size={12} /></a> : <span className="muted-cell">未登録</span>}</td>
+      </tr>)}</tbody></table></div> : <EmptyState title="該当する候補者はいません" body="検索条件を変更してください。" />}
+    </section>
+    {selected && <section className="surface record-detail" aria-live="polite">
+      <div className="record-detail-head"><div className="inspector-person"><div className="person-avatar large">{selected.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><h2>{selected.name}</h2><p>{selected.role_title} · {selected.porters_id}</p></div></div><Badge tone={statusTone(selected.status)}>{statusLabels[locale][selected.status] || selected.status}</Badge></div>
+      <div className="record-detail-grid">
+        <div><h3>基本・希望条件</h3><dl className="detail-list"><div><dt>専門領域</dt><dd>{selected.specialization || "—"} / {selected.specialization_years}年</dd></div><div><dt>年齢・経験</dt><dd>{selected.age ?? "—"}歳 / 通算{selected.years_experience}年</dd></div><div><dt>現年収 → 希望</dt><dd>{selected.current_salary_million ?? "—"}M → {selected.desired_salary_million ?? "—"}M VND</dd></div><div><dt>勤務形態</dt><dd>{(selected.work_style_options || []).map(mode => workLabels[mode] || mode).join("・") || workLabels[selected.work_style]}</dd></div><div><dt>通勤許容</dt><dd><MapPin size={14} />{selected.commute_minutes ?? "—"}分</dd></div></dl></div>
+        <div><h3>並行状況</h3><div className="parallel-summary"><div><span>社内並行</span><strong>{selected.internal_parallel_count}</strong></div><div><span>社外並行</span><strong>{selected.external_parallel_count}</strong></div></div><div className="process-list">{selected.current_processes.length ? selected.current_processes.map((process, index) => <div key={`${process.label}-${index}`}><BriefcaseBusiness size={14} /><span><strong>{process.label}</strong><small>{process.scope === "internal" ? "社内" : "社外"} · {process.stage}</small></span></div>) : <span className="muted-cell">並行選考なし</span>}</div></div>
+        <div><h3>スキル・メモ</h3><div className="skill-cloud">{selected.skills.map(skill => <span key={skill}>{skill}</span>)}</div><div className="note-box"><p>{selected.notes || "—"}</p></div></div>
+      </div>
+      {role === "ca" && <div className="candidate-match-area"><button className="button primary" onClick={onLoadMatches}><Sparkles size={16} />この候補者に合う案件を探す</button>{matches.length > 0 && <div className="inline-match-list">{matches.slice(0, 4).map(match => <article key={match.id}><div><strong>{match.job_title}</strong><span>{match.company_name}</span></div><b>{match.score}</b><small>{match.evidence_quote}</small></article>)}</div>}</div>}
+    </section>}
+  </div>;
 }

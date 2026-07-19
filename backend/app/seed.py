@@ -10,15 +10,17 @@ from .models import ActionItem, Application, Candidate, Company, IntegrationConn
 
 def enrich_workflow_data(db: Session) -> None:
     candidate_profiles = {
-        "cand-hoa": {"email": "hoa@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 4.5, "recent_tenure_years": 3.2, "internal_parallel_count": 2, "external_parallel_count": 1, "current_processes": [{"scope": "internal", "label": "A社 ラインリーダー", "stage": "オファー"}, {"scope": "internal", "label": "B社 製造管理", "stage": "意向確認"}, {"scope": "external", "label": "他社選考", "stage": "一次面接"}]},
-        "cand-son": {"email": "son@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 2.5, "recent_tenure_years": 1.3, "internal_parallel_count": 1, "external_parallel_count": 0, "current_processes": [{"scope": "internal", "label": "A社 第2ライン", "stage": "書類選考"}]},
-        "cand-minh": {"email": "minh@example.invalid", "remote_preference": "flexible", "specialization": "qc", "specialization_years": 4, "recent_tenure_years": 2.8, "internal_parallel_count": 1, "external_parallel_count": 1, "current_processes": [{"scope": "internal", "label": "B社 QC", "stage": "一次面接"}, {"scope": "external", "label": "他社品質管理", "stage": "書類選考"}]},
-        "cand-huy": {"email": "huy@example.invalid", "remote_preference": "onsite", "specialization": "cnc", "specialization_years": 5.5, "recent_tenure_years": 3.5, "internal_parallel_count": 1, "external_parallel_count": 2, "current_processes": [{"scope": "internal", "label": "C社 CNC", "stage": "書類選考"}, {"scope": "external", "label": "他社CNC", "stage": "最終面接"}, {"scope": "external", "label": "他社旋盤", "stage": "一次面接"}]},
-        "cand-trang": {"email": "trang@example.invalid", "remote_preference": "hybrid", "specialization": "interpretation", "specialization_years": 4, "recent_tenure_years": 2.1, "internal_parallel_count": 1, "external_parallel_count": 0, "current_processes": [{"scope": "internal", "label": "D社 総務通訳", "stage": "意向確認"}]},
-        "cand-mai": {"email": "mai@example.invalid", "remote_preference": "onsite", "specialization": "line_management", "specialization_years": 2, "recent_tenure_years": 2.4, "internal_parallel_count": 0, "external_parallel_count": 0, "current_processes": []},
-        "cand-quan": {"email": "quan@example.invalid", "remote_preference": "remote", "specialization": "backend", "specialization_years": 5, "recent_tenure_years": 1.8, "internal_parallel_count": 1, "external_parallel_count": 2, "current_processes": [{"scope": "internal", "label": "F社 Backend", "stage": "推薦準備"}, {"scope": "external", "label": "他社SaaS", "stage": "技術面接通過"}, {"scope": "external", "label": "他社Fintech", "stage": "一次面接"}]},
-        "cand-lan": {"email": "lan@example.invalid", "remote_preference": "onsite", "specialization": "assembly", "specialization_years": 3, "recent_tenure_years": 0.8, "internal_parallel_count": 0, "external_parallel_count": 0, "current_processes": []},
+        "cand-hoa": ("hoa@example.invalid", 12.5, ["onsite", "hybrid"], "onsite", "line_management", 4.5, 3.2, 2, 1, [{"scope": "internal", "label": "A社 ラインリーダー", "stage": "オファー"}, {"scope": "internal", "label": "B社 製造管理", "stage": "意向確認"}, {"scope": "external", "label": "他社選考", "stage": "一次面接"}]),
+        "cand-son": ("son@example.invalid", 10.5, ["onsite"], "onsite", "line_management", 2.5, 1.3, 1, 0, [{"scope": "internal", "label": "A社 第2ライン", "stage": "書類選考"}]),
+        "cand-minh": ("minh@example.invalid", 11.5, ["onsite", "hybrid"], "flexible", "qc", 4, 2.8, 1, 1, [{"scope": "internal", "label": "B社 QC", "stage": "一次面接"}, {"scope": "external", "label": "他社品質管理", "stage": "書類選考"}]),
+        "cand-huy": ("huy@example.invalid", 13, ["onsite"], "onsite", "cnc", 5.5, 3.5, 1, 2, [{"scope": "internal", "label": "C社 CNC", "stage": "書類選考"}, {"scope": "external", "label": "他社CNC", "stage": "最終面接"}, {"scope": "external", "label": "他社旋盤", "stage": "一次面接"}]),
+        "cand-trang": ("trang@example.invalid", 14, ["onsite", "hybrid"], "hybrid", "interpretation", 4, 2.1, 1, 0, [{"scope": "internal", "label": "D社 総務通訳", "stage": "意向確認"}]),
+        "cand-mai": ("mai@example.invalid", 10.5, ["onsite"], "onsite", "line_management", 2, 2.4, 0, 0, []),
+        "cand-quan": ("quan@example.invalid", 25, ["remote", "hybrid"], "remote", "backend", 5, 1.8, 1, 2, [{"scope": "internal", "label": "F社 Backend", "stage": "推薦準備"}, {"scope": "external", "label": "他社SaaS", "stage": "技術面接通過"}, {"scope": "external", "label": "他社Fintech", "stage": "一次面接"}]),
+        "cand-lan": ("lan@example.invalid", 10, ["onsite"], "onsite", "assembly", 3, 0.8, 0, 0, []),
     }
+    keys = ("email", "current_salary_million", "work_style_options", "remote_preference", "specialization", "specialization_years", "recent_tenure_years", "internal_parallel_count", "external_parallel_count", "current_processes")
+    candidate_profiles = {candidate_id: dict(zip(keys, values)) for candidate_id, values in candidate_profiles.items()}
     for candidate_id, values in candidate_profiles.items():
         candidate = db.get(Candidate, candidate_id)
         if candidate:
@@ -50,6 +52,26 @@ def enrich_workflow_data(db: Session) -> None:
 
     if db.get(Candidate, "cand-mai") and db.get(Job, "job-a-line") and not db.get(Application, "app-mai-a-won"):
         db.add(Application(id="app-mai-a-won", candidate_id="cand-mai", job_id="job-a-line", stage="closed_won", recommended_at=date(2026, 7, 2), last_event_at=date(2026, 7, 18), company_ok=True, candidate_ok=True))
+    action_profiles = [
+        ("q-ra-son", "ra", "mine", "client_chase", "A社へ書類選考結果の催促（Phan Van Son推薦）", "over", "推薦から5営業日経過。企業平均2.5日を超過。", "app-son-a2"),
+        ("q-ra-huy", "ra", "mine", "client_chase", "C社 求人票の追加ヒアリング回答をCAへ共有", "due", "夜勤有無・送迎バス範囲を確認済み。未共有。", "app-huy-c"),
+        ("q-ra-trang", "ra", "mine", "candidate_follow", "D社 面接候補日をCA経由で候補者へ確認", "due", "企業から3枠提示あり。本日中に一次回答が必要。", "app-trang-d"),
+        ("q-ra-food", "ra", "mine", "approval", "食品加工G社 推薦メール下書きの承認", "ok", "AI生成済み。承認後にGmail送信キューへ登録。", None),
+        ("q-ra-minh-wait", "ra", "theirs", "client_reply", "B社 一次面接の合否連絡待ち（Tran Van Minh）", "due", "平均返答4日。週明けにAIが催促文面を提案予定。", "app-minh-b"),
+        ("q-ra-hoa-wait", "ra", "theirs", "offer_reply", "A社 給与再提示の回答待ち（Nguyen Thi Hoa）", "due", "14.5Mで再提示済み。回答期限は本日。", "app-hoa-a"),
+        ("q-ra-trang-wait", "ra", "theirs", "candidate_reply", "Pham Thu Trang 意向確認の返信待ち", "ok", "CA経由で連絡済み。候補者の返答待ち。", "cand-trang"),
+        ("q-ca-hoa", "ca", "mine", "candidate_follow", "Nguyen Thi Hoaへオファー意向を確認", "over", "平均反応1.5日超過。電話確認を推奨。", "cand-hoa"),
+        ("q-ca-trang", "ca", "mine", "candidate_follow", "Pham Thu Trangへ面接候補日を確認", "call", "既読無反応2回。D社へ本日中に回答が必要。", "cand-trang"),
+        ("q-ca-son-wait", "ca", "theirs", "client_reply", "A社 書類選考結果待ち（Phan Van Son）", "due", "RAが企業へ催促中。", "app-son-a2"),
+    ]
+    for action_id, owner_role, ball_owner, queue_type, label, severity, reason, source_ref in action_profiles:
+        action = db.get(ActionItem, action_id)
+        if not action:
+            action = ActionItem(id=action_id, owner_role=owner_role, queue_type=queue_type, target_label=label, due_date=date(2026, 7, 19), severity=severity, reason=reason, source_ref=source_ref)
+            db.add(action)
+        action.ball_owner = ball_owner
+        action.target_label = label
+        action.reason = reason
     db.commit()
 
 

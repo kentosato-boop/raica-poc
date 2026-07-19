@@ -21,10 +21,13 @@ def test_health_and_dashboard():
         dashboard = client.get("/api/v1/dashboard").json()
         assert dashboard["counts"]["candidates"] == 8
         assert dashboard["counts"]["open_jobs"] == 6
-        assert dashboard["counts"]["open_actions"] == 5
+        assert dashboard["counts"]["open_actions"] == 11
         assert dashboard["counts"]["recommendations"] >= 1
         assert dashboard["counts"]["closed_won"] == 1
         assert dashboard["pipeline_scope"] == "RA 太郎の担当企業"
+        assert dashboard["targets"]["recommendations"] == 20
+        assert dashboard["my_actions"]
+        assert dashboard["waiting_actions"]
 
 
 def test_candidate_search_and_job_matching():
@@ -39,6 +42,8 @@ def test_candidate_search_and_job_matching():
         assert payload["matches"][0]["score"] >= 70
         assert payload["matches"][0]["score"] < 100
         assert {"age", "remote", "specialization", "stability"}.issubset(payload["matches"][0]["scores"])
+        reverse_matches = client.get("/api/v1/candidates/cand-huy/matches").json()
+        assert reverse_matches[0]["job_id"] == "job-c-cnc"
 
 
 def test_match_approval_persists_application():
@@ -93,6 +98,11 @@ def test_job_search_and_skill_sheet_upload():
         payload = response.json()
         assert "python" in payload["candidate"]["skills"]
         assert payload["candidate"]["skill_sheet_filename"] == "quan-skill.txt"
+        assert payload["candidate"]["current_salary_million"] == 25
+        assert payload["candidate"]["work_style_options"] == ["remote", "hybrid"]
+        download = client.get("/api/v1/candidates/cand-quan/skill-sheet")
+        assert download.status_code == 200
+        assert download.content == b"Python backend engineer 5 years FastAPI"
 
 
 def test_porters_sync_upserts_api_records(monkeypatch):
