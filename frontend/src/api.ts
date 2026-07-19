@@ -1,4 +1,4 @@
-import type { ActionItem, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, RevivalData, SyncRun } from "./types";
+import type { ActionItem, AiAnalysisResult, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, RevivalData, SyncRun } from "./types";
 
 const API_KEY = import.meta.env.VITE_RAICA_API_KEY as string | undefined;
 
@@ -37,6 +37,7 @@ export const api = {
   jobs: (query = "", includeClosed = false) => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}&include_closed=${includeClosed}`),
   matches: (jobId: string) => request<MatchItem[]>(`/api/v1/jobs/${jobId}/matches`),
   rerunMatches: (jobId: string, actor: string) => request<{ generated: number; matches: MatchItem[] }>(`/api/v1/jobs/${jobId}/matches/run`, { method: "POST", body: JSON.stringify({ actor }) }),
+  aiAnalysis: (jobId: string, actor: string) => request<AiAnalysisResult>(`/api/v1/jobs/${jobId}/ai-analysis`, { method: "POST", body: JSON.stringify({ actor }) }),
   decideMatch: (matchId: string, status: string, actor: string) => request<{ id: string; recommendation_status: string; recommendation_draft: RecommendationDraft | null }>(`/api/v1/matches/${matchId}`, { method: "PATCH", body: JSON.stringify({ status, actor }) }),
   recommendationDraft: (matchId: string) => request<RecommendationDraft>(`/api/v1/matches/${matchId}/recommendation-draft`),
   sendContact: (payload: { channel: "gmail" | "zalo" | "phone"; candidate_id?: string; company_id?: string; recipient?: string; subject?: string; body: string; human_approved_by: string }) => request<{ id: string; delivery_status: string; delivery_error: string | null }>("/api/v1/contacts", { method: "POST", body: JSON.stringify(payload) }),

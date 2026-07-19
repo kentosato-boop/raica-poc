@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +36,19 @@ class Settings(BaseSettings):
     zalo_webhook_url: str | None = None
     asana_webhook_url: str | None = None
     integration_timeout_seconds: float = 15.0
+
+    # AI分析（推薦上位の適合理由をLLMで生成）。キー未設定ならルールベース説明へフォールバックする。
+    anthropic_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("RAICA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
+    )
+    llm_model: str = "claude-sonnet-5"
+    llm_analysis_enabled: bool = True
+    llm_timeout_seconds: float = 30.0
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.anthropic_api_key) and self.llm_analysis_enabled
 
     @property
     def allowed_origins(self) -> list[str]:

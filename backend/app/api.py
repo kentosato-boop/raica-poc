@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 from .config import Settings, get_settings
 from .database import get_db
 from .integrations import dispatch_event, enqueue_event, integration_snapshot, sync_porters, test_integration
+from .llm import analyze_matches
 from .matching import AI_SHORTLIST_SIZE, WEIGHTS, run_matching, score_candidate
 from .models import ActionItem, Application, AuditLog, Candidate, Company, ContactLog, IntegrationConnection, Job, Match, OutboxEvent, SyncRun
 from .schemas import ActionUpdate, ActorRequest, ContactCreate, MatchDecision, OutboxRetry
@@ -478,6 +479,24 @@ def rerun_matches(job_id: str, payload: ActorRequest, db: Session = Depends(get_
     statement = select(Match).where(Match.id.in_([item.id for item in generated])).options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)).order_by(Match.score.desc())
     hydrated = db.scalars(statement).all()
     return {"generated": len(hydrated), "weights": WEIGHTS, "shortlist": AI_SHORTLIST_SIZE, "matches": [match_dict(item, rank=index + 1) for index, item in enumerate(hydrated)]}
+
+
+@router.post("/jobs/{job_id}/ai-analysis")
+def job_ai_analysis(job_id: str, payload: ActorRequest, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict:
+    """ルール選抜を通過した上位候補をLLMで分析する（キー未設定時はスコア根拠へフォールバック）。"""
+    job = db.scalar(select(Job).where(Job.id == job_id).options(selectinload(Job.company)))
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    statement = (
+        select(Match).where(Match.job_id == job_id)
+        .options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company))
+        .order_by(Match.score.desc()).limit(AI_SHORTLIST_SIZE)
+    )
+    top = db.scalars(statement).all()
+    result = analyze_matches(settings, job, top)
+    db.add(AuditLog(actor=payload.actor, action="matching.ai_analysis", entity_type="job", entity_id=job_id, details={"source": result["source"], "model": result.get("model"), "analyzed": len(result["analyses"])}))
+    db.commit()
+    return {"job_id": job_id, **result}
 
 
 @router.patch("/matches/{match_id}")

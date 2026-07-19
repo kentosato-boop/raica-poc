@@ -1,18 +1,32 @@
 import { Check, FileText, RefreshCw, SlidersHorizontal, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../api";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { useI18n } from "../i18n";
-import type { Job, MatchItem } from "../types";
+import type { AiAnalysisResult, Job, MatchItem } from "../types";
+
+const verdictTone: Record<string, "success" | "warning" | "neutral"> = { "推薦": "success", "要検討": "warning", "見送り検討": "neutral" };
 
 const statusLabels: Record<string, string> = { open: "募集中", urgent: "急募", phase2: "第2弾", closed: "終了" };
 const workLabels: Record<string, string> = { remote: "リモート", onsite: "常駐", hybrid: "ハイブリッド" };
 
-export function JobsView({ role, search, jobs, selectedJobId, onSelect, matches, loading, onRerun, onDecision }: {
+export function JobsView({ role, search, jobs, selectedJobId, onSelect, matches, loading, onRerun, onDecision, actor, onError }: {
   role: "ra" | "ca"; search: string; jobs: Job[]; selectedJobId: string; onSelect: (jobId: string) => void; matches: MatchItem[];
   loading: boolean; onRerun: () => void; onDecision: (id: string, status: "approved" | "rejected") => void;
+  actor: string; onError: (message: string) => void;
 }) {
   const { t } = useI18n(); const selected = jobs.find(job => job.id === selectedJobId) || null;
+  const [analysis, setAnalysis] = useState<AiAnalysisResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  useEffect(() => { setAnalysis(null); }, [selectedJobId]);
+  const runAnalysis = async () => {
+    if (!selectedJobId) return;
+    setAnalyzing(true);
+    try { setAnalysis(await api.aiAnalysis(selectedJobId, actor)); }
+    catch (error) { onError((error as Error).message); }
+    finally { setAnalyzing(false); }
+  };
   const [statusFilter, setStatusFilter] = useState("");
   const [workFilter, setWorkFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
@@ -36,6 +50,18 @@ export function JobsView({ role, search, jobs, selectedJobId, onSelect, matches,
     <section className="surface table-surface database-surface">{filteredJobs.length ? <div className="table-scroll"><table className="data-table database-table jobs-table"><thead><tr><th>案件・企業</th><th>状態</th><th>勤務地</th><th>給与</th><th>経験</th><th>年齢</th><th>勤務形態</th><th>専門領域</th><th>推薦候補</th><th>受領日</th></tr></thead><tbody>{filteredJobs.map(job => <tr key={job.id} className={selectedJobId === job.id ? "selected-row" : ""} onClick={() => onSelect(job.id)}><td><strong>{job.title}</strong><small>{job.company_name} · {job.porters_id}</small>{job.search_match && <span className="search-match">{job.search_match}一致</span>}</td><td><Badge tone={statusTone(job.status)}>{statusLabels[job.status] || job.status}</Badge></td><td>{job.location || "—"}</td><td>{job.salary_min_million ?? "—"}–{job.salary_max_million ?? "—"}M</td><td>{job.min_specialization_years || job.min_experience_years}年以上</td><td>{job.preferred_age_min ?? "—"}–{job.preferred_age_max ?? "—"}歳</td><td>{workLabels[job.remote_mode] || job.remote_mode}</td><td>{job.specialization || "—"}</td><td><Badge tone="success">{job.ai_candidate_count}名</Badge></td><td>{job.received_date}</td></tr>)}</tbody></table></div> : <EmptyState title="案件がありません" body="検索条件を変更してください。" />}</section>
     {selected && <section className="surface job-recommendation-panel"><div className="section-head"><div><span className="eyebrow">{role === "ra" ? "RA RECOMMENDATION" : "JOB DETAIL"}</span><h2>{selected.company_name} / {selected.title}</h2><p>{selected.required_skills.join(" · ")} · {workLabels[selected.remote_mode] || selected.remote_mode}</p></div>{role === "ra" && <button className="button primary batch-match-button" disabled={loading} onClick={onRerun}><RefreshCw size={16} className={loading ? "spin" : ""} />対象候補者全員と一括マッチング</button>}</div>
       {role === "ra" && <p className="pipeline-hint"><Sparkles size={13} />ルールで {matches.length} 名に一次選抜し、AIが上位 {Math.min(3, matches.length)} 名を推薦しています。</p>}
+      {role === "ra" && <div className="ai-analysis-block">
+        <div className="ai-analysis-head">
+          <button className="button secondary small" disabled={analyzing || !matches.length} onClick={runAnalysis}><Sparkles size={15} />{analyzing ? "分析中…" : "AIで上位3名を分析"}</button>
+          {analysis && <span className={`ai-source ai-source-${analysis.source}`}>{analysis.source === "llm" ? `LLM分析 · ${analysis.model}` : "スコア根拠（LLM未接続）"}</span>}
+        </div>
+        {analysis?.reason && <p className="ai-analysis-note">{analysis.reason}</p>}
+        {analysis && analysis.analyses.length > 0 && <div className="ai-analysis-list">{analysis.analyses.map(entry => <article key={entry.candidate_id}>
+          <header><strong>{entry.candidate_name}</strong><Badge tone={verdictTone[entry.verdict] ?? "neutral"}>{entry.verdict}</Badge></header>
+          <p><span>適合理由</span>{entry.fit_reason}</p>
+          <p className="concern"><span>懸念点</span>{entry.concerns}</p>
+        </article>)}</div>}
+      </div>}
       {role === "ra" && <div className="recommendation-table"><div className="recommendation-head"><span>推薦候補</span><span>適合度</span><span>根拠</span><span>並行状況</span><span>判断</span></div>{matches.map(match => <div className={`recommendation-row${match.ai_recommended ? " ai-pick-row" : ""}`} key={match.id}><div className="person-cell"><div className="person-avatar">{match.candidate_name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{match.candidate_name}{match.ai_recommended && <span className="ai-pick">AI推薦 #{match.ai_rank}</span>}</strong><small>{match.candidate_role} · {match.candidate_experience}年</small></div></div><strong className="match-score">{match.score}</strong><p><Sparkles size={14} />{match.evidence_quote}</p><div className="parallel-compact"><span>社内 {match.candidate_internal_parallel}</span><span>社外 {match.candidate_external_parallel}</span>{match.candidate_skill_sheet && <span><FileText size={12} />PDF</span>}</div><div className="decision-buttons"><button title="推薦を承認" onClick={() => onDecision(match.id, "approved")}><Check size={15} /></button><button title="見送り" onClick={() => onDecision(match.id, "rejected")}><X size={15} /></button></div></div>)}</div>}
     </section>}
   </div>;

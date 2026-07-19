@@ -476,6 +476,20 @@ body { background: var(--bg); }
 .ai-pick { margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 10px; font-weight: 700; vertical-align: middle; }
 .match-row.ai-pick-row, .recommendation-row.ai-pick-row { box-shadow: inset 3px 0 0 var(--blue); }
 .pipeline-hint { display: flex; align-items: center; gap: 6px; margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+/* AI分析（LLM生成の適合理由・懸念点。キー未設定時はスコア根拠へフォールバック） */
+.ai-analysis-block { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-muted); }
+.ai-analysis-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ai-source { font-size: 11.5px; font-weight: 600; }
+.ai-source-llm { color: var(--blue); }
+.ai-source-rule-based { color: var(--muted); }
+.ai-analysis-note { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+.ai-analysis-list { margin-top: 10px; display: grid; gap: 8px; }
+.ai-analysis-list article { padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-solid); }
+.ai-analysis-list header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ai-analysis-list header strong { font-size: 13px; }
+.ai-analysis-list p { margin: 3px 0; color: var(--text-2); font-size: 12px; line-height: 1.6; }
+.ai-analysis-list p span { margin-right: 8px; padding: 1px 6px; border-radius: 5px; background: var(--surface-muted); color: var(--muted); font-size: 10px; font-weight: 700; }
+.ai-analysis-list p.concern { color: var(--muted); }
 /* 新規流入リードの通知 */
 .inflow-notice { padding: 14px 18px; display: grid; gap: 10px; }
 .inflow-notice-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text); }

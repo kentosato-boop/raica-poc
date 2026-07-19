@@ -9,6 +9,9 @@ DB_PATH = Path(TEST_DIR.name) / "raica-test.sqlite3"
 os.environ["RAICA_DATABASE_URL"] = f"sqlite:///{DB_PATH}"
 os.environ["RAICA_SKILL_SHEET_STORAGE_DIR"] = str(Path(TEST_DIR.name) / "skill_sheets")
 os.environ.pop("RAICA_API_KEY", None)
+# テストが実APIを叩かないようLLMキーを必ず外す（フォールバック経路を検証する）
+os.environ.pop("ANTHROPIC_API_KEY", None)
+os.environ.pop("RAICA_ANTHROPIC_API_KEY", None)
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402
@@ -111,6 +114,24 @@ def test_match_approval_persists_application():
         application = db.scalar(select(Application).where(Application.candidate_id == match["candidate_id"], Application.job_id == "job-a-phase2"))
         assert application is not None
         assert application.stage == "recommended"
+
+
+def test_ai_analysis_falls_back_without_api_key():
+    with TestClient(app) as client:
+        result = client.post("/api/v1/jobs/job-a-phase2/ai-analysis", json={"actor": "pytest"}).json()
+        assert result["source"] == "rule-based"
+        assert result["model"] is None
+        assert "ANTHROPIC_API_KEY" in result["reason"]
+        assert 1 <= len(result["analyses"]) <= 3  # ルール通過の上位3名まで
+        entry = result["analyses"][0]
+        assert entry["candidate_id"] and entry["candidate_name"]
+        assert entry["fit_reason"]
+        assert entry["verdict"] in {"推薦", "要検討", "見送り検討"}
+
+
+def test_ai_analysis_returns_404_for_unknown_job():
+    with TestClient(app) as client:
+        assert client.post("/api/v1/jobs/job-does-not-exist/ai-analysis", json={"actor": "pytest"}).status_code == 404
 
 
 def test_contact_uses_outbox_and_human_approval():

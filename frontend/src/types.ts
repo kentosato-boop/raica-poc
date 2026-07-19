@@ -129,6 +129,22 @@ export interface MatchItem {
   updated_at: string;
 }
 
+export interface AiAnalysisEntry {
+  candidate_id: string;
+  candidate_name: string;
+  fit_reason: string;
+  concerns: string;
+  verdict: "推薦" | "要検討" | "見送り検討" | string;
+}
+
+export interface AiAnalysisResult {
+  job_id: string;
+  source: "llm" | "rule-based" | "none";
+  model: string | null;
+  reason: string | null;
+  analyses: AiAnalysisEntry[];
+}
+
 export interface RevivalItem {
   id: string;
   kind: "company" | "candidate";
