@@ -41,6 +41,27 @@ def enrich_workflow_data(db: Session) -> None:
             for key, value in values.items():
                 setattr(candidate, key, value)
 
+    recruiting_profiles = {
+        "cand-hoa": ("Ha Noi", ["Ha Noi", "Bac Ninh"], date(2026, 8, 1), "ベトナム国籍・就労可", "紹介", "zalo", "confirmed"),
+        "cand-son": ("Bac Ninh", ["Bac Ninh"], date(2026, 7, 25), "ベトナム国籍・就労可", "求人媒体", "phone", "confirmed"),
+        "cand-minh": ("Hung Yen", ["Hung Yen", "Ha Noi"], date(2026, 8, 15), "ベトナム国籍・就労可", "Porters", "zalo", "confirmed"),
+        "cand-huy": ("Ha Noi", ["Ha Noi", "Bac Ninh"], date(2026, 7, 22), "ベトナム国籍・就労可", "自社サイト", "phone", "confirmed"),
+        "cand-trang": ("Ha Noi", ["Ha Noi"], date(2026, 8, 1), "ベトナム国籍・就労可", "リファラル", "gmail", "confirmed"),
+        "cand-mai": ("Bac Ninh", ["Bac Ninh", "Hung Yen"], date(2026, 7, 28), "ベトナム国籍・就労可", "過去成約者紹介", "zalo", "confirmed"),
+        "cand-quan": ("Ha Noi", ["Ha Noi", "リモート"], date(2026, 8, 10), "ベトナム国籍・就労可", "LinkedIn", "gmail", "confirmed"),
+        "cand-lan": ("Hung Yen", ["Hung Yen"], None, "ベトナム国籍・就労可", "Zalo OA", "zalo", "reconfirm_required"),
+        "cand-thao": ("Ha Noi", ["Ha Noi", "ハイブリッド"], None, "ベトナム国籍・就労可", "過去登録", "gmail", "reconfirm_required"),
+        "cand-duc": ("Da Nang", ["リモート", "Da Nang"], date(2026, 9, 1), "ベトナム国籍・就労可", "LinkedIn", "gmail", "confirmed"),
+        "cand-yen": ("Ha Noi", ["Ha Noi", "リモート"], date(2026, 8, 1), "ベトナム国籍・就労可", "技術コミュニティ", "gmail", "confirmed"),
+        "cand-binh": ("Bac Giang", ["Bac Giang", "Bac Ninh"], date(2026, 8, 20), "ベトナム国籍・就労可", "Porters", "zalo", "confirmed"),
+    }
+    profile_keys = ("current_location", "desired_locations", "available_from", "work_authorization", "source_channel", "preferred_contact_channel", "consent_status")
+    for candidate_id, values in recruiting_profiles.items():
+        candidate = db.get(Candidate, candidate_id)
+        if candidate:
+            for key, value in zip(profile_keys, values):
+                setattr(candidate, key, value)
+
     supplementary_companies = [
         Company(id="co-g", name="G社", industry="food", ra_owner="RA 太郎", avg_reply_days=3.0, hiring_signal="新ライン稼働の求人媒体掲載を検知", revival_status="hot", last_contact_date=date(2026, 2, 18), last_job_date=date(2025, 10, 2), dormant_job_title="食品加工ラインリーダー", dormancy_reason="工場増設延期により採用停止", notes="前回2名成約。夜勤可能者の反応が良い。"),
         Company(id="co-h", name="H社", industry="logistics", ra_owner="RA 太郎", avg_reply_days=4.5, hiring_signal="採用ページを3か月ぶりに更新", revival_status="watching", last_contact_date=date(2026, 1, 9), last_job_date=date(2025, 7, 20), dormant_job_title="倉庫管理スーパーバイザー", dormancy_reason="採用予算凍結", notes="日本語N3以上、倉庫管理3年以上を重視。"),

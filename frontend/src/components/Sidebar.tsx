@@ -17,8 +17,7 @@ export function Sidebar({ role, view, onChange, open, onClose, openActions }: { 
   return (
     <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
       <div className="brand-row">
-        <div className="app-icon" aria-hidden="true">R.</div>
-        <div><strong>RAiCA <small>PoC</small></strong><span>AIマッチングシステム</span></div>
+        <div><strong>RAiCA</strong><span>AIマッチングシステム</span></div>
         <button className="icon-button sidebar-close" onClick={onClose} title="メニューを閉じる"><X size={18} /></button>
       </div>
       <div className="sidebar-section-label">{t("workspace")}</div>

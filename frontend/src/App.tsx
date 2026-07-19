@@ -7,6 +7,7 @@ import { Topbar } from "./components/Topbar";
 import { createTranslator, I18nProvider, type Locale } from "./i18n";
 import type { ActionItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, RevivalData, RevivalItem, SyncRun, ViewKey } from "./types";
 import { DashboardView } from "./views/DashboardView";
+import { LoginView } from "./views/LoginView";
 
 const ActionsView = lazy(() => import("./views/ActionsView").then(module => ({ default: module.ActionsView })));
 const CandidatesView = lazy(() => import("./views/CandidatesView").then(module => ({ default: module.CandidatesView })));
@@ -19,9 +20,10 @@ type Toast = { message: string; tone: "success" | "error" } | null;
 
 export default function App() {
   const [view, setView] = useState<ViewKey>("dashboard");
-  const [role, setRole] = useState<"ra" | "ca">("ra");
+  const [role, setRole] = useState<"ra" | "ca">(() => (sessionStorage.getItem("raica-role") as "ra" | "ca") || "ra");
+  const [loggedIn, setLoggedIn] = useState(() => Boolean(sessionStorage.getItem("raica-role")));
   const [locale, setLocale] = useState<Locale>(() => (localStorage.getItem("raica-locale") as Locale) || "ja");
-  const [dark, setDark] = useState(() => localStorage.getItem("raica-theme") === "dark");
+  const [dark, setDark] = useState(() => localStorage.getItem("raica-theme") !== "light");
   const [navVisible, setNavVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
@@ -29,7 +31,7 @@ export default function App() {
   const [toast, setToast] = useState<Toast>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [candidateStatus, setCandidateStatus] = useState("");
+  const [candidateStatus, setCandidateStatus] = useState("active");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [uploading, setUploading] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -155,18 +157,32 @@ export default function App() {
   const syncPorters = async () => { setIntegrationBusy("porters"); try { const result = await api.syncPorters(actor); await Promise.all([loadIntegrations(), loadJobs(), loadDashboard()]); notify(result.status === "completed" ? `${result.records_written} records synced` : result.error_message || "Porters configuration required", result.status === "completed" ? "success" : "error"); } catch (error) { notify((error as Error).message, "error"); } finally { setIntegrationBusy(""); } };
   const retryOutbox = async (eventId: string) => { try { await api.retryOutbox(eventId, actor); await loadIntegrations(); notify("Retry queued"); } catch (error) { notify((error as Error).message, "error"); } };
 
+  const login = (selectedRole: "ra" | "ca") => {
+    sessionStorage.setItem("raica-role", selectedRole);
+    setRole(selectedRole);
+    setView("dashboard");
+    setLoggedIn(true);
+  };
+  const logout = () => {
+    sessionStorage.removeItem("raica-role");
+    setLoggedIn(false);
+    setSearch("");
+  };
+
+  if (!loggedIn) return <I18nProvider value={{ locale, t }}><LoginView locale={locale} onLocale={setLocale} dark={dark} onDark={() => setDark(value => !value)} onLogin={login} /></I18nProvider>;
+
   return <I18nProvider value={{ locale, t }}>
     <div className={`app-shell ${navVisible ? "" : "nav-hidden"}`}>
       {navVisible && <Sidebar role={role} view={view} onChange={setView} open={sidebarOpen} onClose={() => setSidebarOpen(false)} openActions={dashboard?.counts.open_actions ?? 0} />}
       <div className="app-main">
-        <Topbar role={role} onRole={setRole} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} />
+        <Topbar role={role} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} onLogout={logout} />
         <main className="main-content"><Suspense fallback={<div className="view-loading" aria-label="読み込み中"><i /><span>Loading</span></div>}>
-          {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} />}
+          {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} onComplete={id => updateAction(id, "done")} />}
           {view === "candidates" && <CandidatesView role={role} search={search} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} onDownload={downloadSkillSheet} uploading={uploading} />}
           {view === "jobs" && <JobsView role={role} search={search} jobs={jobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "matching" && <MatchingView jobs={jobs} selectedJobId={selectedJobId} onJob={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "revival" && <RevivalView role={role} data={revival} onOpen={openRevivalTarget} />}
-          {view === "actions" && <ActionsView actions={actions} role={role} onRole={setRole} status={actionStatus} onStatus={setActionStatus} onUpdate={updateAction} />}
+          {view === "actions" && <ActionsView actions={actions} status={actionStatus} onStatus={setActionStatus} onUpdate={updateAction} />}
           {view === "integrations" && <IntegrationsView integrations={integrations} syncRuns={syncRuns} outbox={outbox} busy={integrationBusy} onTest={testIntegration} onSync={syncPorters} onRetry={retryOutbox} />}
         </Suspense></main>
       </div>

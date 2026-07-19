@@ -45,6 +45,13 @@ export interface Candidate {
   specialization: string | null;
   specialization_years: number;
   recent_tenure_years: number;
+  current_location: string | null;
+  desired_locations: string[];
+  available_from: string | null;
+  work_authorization: string | null;
+  source_channel: string | null;
+  preferred_contact_channel: string | null;
+  consent_status: string;
   skills: string[];
   internal_parallel_count: number;
   external_parallel_count: number;

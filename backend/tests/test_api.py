@@ -71,6 +71,9 @@ def test_candidate_search_and_job_matching():
         python_candidates = client.get("/api/v1/candidates", params={"q": "Python"}).json()
         assert {candidate["id"] for candidate in python_candidates} == {"cand-quan", "cand-yen"}
         assert all(candidate["search_match"] == "登録スキル" for candidate in python_candidates)
+        assert all(candidate["current_location"] == "Ha Noi" for candidate in python_candidates)
+        assert all(candidate["consent_status"] == "confirmed" for candidate in python_candidates)
+        assert all(candidate["preferred_contact_channel"] == "gmail" for candidate in python_candidates)
         result = client.post("/api/v1/jobs/job-c-cnc/matches/run", json={"actor": "pytest"})
         assert result.status_code == 201
         payload = result.json()
