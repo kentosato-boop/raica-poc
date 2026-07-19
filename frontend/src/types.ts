@@ -47,6 +47,8 @@ export interface Candidate {
   recent_tenure_years: number;
   current_location: string | null;
   desired_locations: string[];
+  inflow_date: string | null;
+  inflow_days: number | null;
   available_from: string | null;
   work_authorization: string | null;
   source_channel: string | null;

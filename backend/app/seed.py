@@ -62,6 +62,18 @@ def enrich_workflow_data(db: Session) -> None:
             for key, value in zip(profile_keys, values):
                 setattr(candidate, key, value)
 
+    # 流入日（媒体・紹介からデータベースに入った日）。経過日数を業務DBに表示するための基準。
+    inflow_dates = {
+        "cand-yen": date(2026, 7, 18), "cand-quan": date(2026, 7, 17), "cand-huy": date(2026, 7, 16),
+        "cand-mai": date(2026, 7, 14), "cand-binh": date(2026, 7, 11), "cand-minh": date(2026, 7, 7),
+        "cand-hoa": date(2026, 6, 29), "cand-trang": date(2026, 6, 19), "cand-son": date(2026, 6, 4),
+        "cand-duc": date(2026, 5, 20), "cand-thao": date(2026, 4, 20), "cand-lan": date(2026, 3, 21),
+    }
+    for candidate_id, value in inflow_dates.items():
+        candidate = db.get(Candidate, candidate_id)
+        if candidate:
+            candidate.inflow_date = value
+
     supplementary_companies = [
         Company(id="co-g", name="G社", industry="food", ra_owner="RA 太郎", avg_reply_days=3.0, hiring_signal="新ライン稼働の求人媒体掲載を検知", revival_status="hot", last_contact_date=date(2026, 2, 18), last_job_date=date(2025, 10, 2), dormant_job_title="食品加工ラインリーダー", dormancy_reason="工場増設延期により採用停止", notes="前回2名成約。夜勤可能者の反応が良い。"),
         Company(id="co-h", name="H社", industry="logistics", ra_owner="RA 太郎", avg_reply_days=4.5, hiring_signal="採用ページを3か月ぶりに更新", revival_status="watching", last_contact_date=date(2026, 1, 9), last_job_date=date(2025, 7, 20), dormant_job_title="倉庫管理スーパーバイザー", dormancy_reason="採用予算凍結", notes="日本語N3以上、倉庫管理3年以上を重視。"),

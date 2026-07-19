@@ -47,6 +47,8 @@ def candidate_dict(candidate: Candidate) -> dict:
         "recent_tenure_years": candidate.recent_tenure_years,
         "current_location": candidate.current_location,
         "desired_locations": candidate.desired_locations,
+        "inflow_date": candidate.inflow_date,
+        "inflow_days": (date.today() - candidate.inflow_date).days if candidate.inflow_date else None,
         "available_from": candidate.available_from,
         "work_authorization": candidate.work_authorization,
         "source_channel": candidate.source_channel,

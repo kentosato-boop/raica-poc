@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, MoreHorizontal, RotateCcw } from "lucide-react";
+import { CheckCircle2, Clock3, PauseCircle, RotateCcw } from "lucide-react";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { useI18n } from "../i18n";
@@ -18,7 +18,7 @@ export function ActionsView({ actions, status, onStatus, onUpdate }: { actions: 
           <div className="queue-main"><div><Badge tone="neutral">{queueLabels[item.queue_type] ?? item.queue_type}</Badge><Badge tone={statusTone(item.severity)}>{item.severity}</Badge></div><h2>{item.target_label}</h2><p>{item.reason}</p></div>
           <div className="queue-date"><span>{t("due")}</span><strong>{item.due_date}</strong></div>
           <div className="queue-actions">
-            {item.status !== "done" ? <><button className="icon-button" onClick={() => onUpdate(item.id, "snoozed")} title={t("hold")}><MoreHorizontal size={17} /></button><button className="button primary small" onClick={() => onUpdate(item.id, "done")}><CheckCircle2 size={15} />{t("complete")}</button></> : <button className="button secondary small" onClick={() => onUpdate(item.id, "open")}><RotateCcw size={15} />{t("restore")}</button>}
+            {item.status !== "done" ? <><button className="button secondary small" onClick={() => onUpdate(item.id, "snoozed")}><PauseCircle size={15} />{t("hold")}</button><button className="button primary small" onClick={() => onUpdate(item.id, "done")}><CheckCircle2 size={15} />{t("complete")}</button></> : <button className="button secondary small" onClick={() => onUpdate(item.id, "open")}><RotateCcw size={15} />{t("restore")}</button>}
           </div>
         </article>)}</div> : <EmptyState title={t("actionsEmpty")} body="" />}
       </section>

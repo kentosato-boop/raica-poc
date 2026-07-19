@@ -43,6 +43,7 @@ class Candidate(TimestampMixin, Base):
     recent_tenure_years: Mapped[float] = mapped_column(Float, default=0)
     current_location: Mapped[Optional[str]] = mapped_column(String(120))
     desired_locations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    inflow_date: Mapped[Optional[date]] = mapped_column(Date)
     available_from: Mapped[Optional[date]] = mapped_column(Date)
     work_authorization: Mapped[Optional[str]] = mapped_column(String(120))
     source_channel: Mapped[Optional[str]] = mapped_column(String(80))
