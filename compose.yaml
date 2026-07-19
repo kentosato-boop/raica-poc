@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: raica
+      POSTGRES_USER: raica
+      POSTGRES_PASSWORD: raica-local
+    volumes:
+      - raica-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raica"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      RAICA_ENVIRONMENT: docker
+      RAICA_DATABASE_URL: postgresql+psycopg://raica:raica-local@db:5432/raica
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  raica-postgres:

@@ -1,74 +1,90 @@
-# RAiCA — RA/CA支援AIマッチングシステム（PoC）
+# RAiCA 2.0
 
-人材紹介の RA（企業担当）/ CA（候補者担当）業務を支援するAIツールのPoCデモです。
+RA（企業担当）とCA（候補者担当）の行動を、候補者・求人・選考データから生成するフルスタック業務アプリです。単一HTMLデモではなく、React/TypeScript、FastAPI、SQLAlchemy、PostgreSQL/SQLiteで構成しています。
 
-## 最初に：このPoCが答える4つの問い
+## 構成
 
-| 問い | 答え |
-|---|---|
-| **何の課題を解決するか** | ①候補者DBが「朝市」で流れ再活用されない（休眠19,842件） ②企業・候補者への連絡漏れ/遅れで歩留まりが落ちる ③選考状況が担当者の頭の中にしかない |
-| **導入すると何が良くなるか** | 休眠返信率 2.8%→6.1%（2.2倍）、候補者選定 60–90分→41分、催促・フォローの抜け漏れゼロ化（ルール＋AI検知） |
-| **なぜ今か** | 休眠資産は放置するほど価値が減る。市場給与+18%の今が再接触の好機。Zalo OA・LLM APIで低コスト実装が可能になった |
-| **次に判断してほしいこと** | PoC 2ヶ月の成功条件（仕様書§6のKPI 3点）で開始するか。Porters API契約プランの確認。HITL運用の承認体制 |
+```text
+frontend/             React + TypeScript + Vite
+backend/app/          FastAPI、SQLAlchemyモデル、業務API、連携アダプター
+backend/migrations/   Alembic DBマイグレーション
+backend/tests/        API・DB・Porters同期テスト
+data/                 開発用SQLiteとCSV受け渡し領域
+compose.yaml          PostgreSQL + RAiCAの一括起動
+```
 
-## ファイル構成
+## 実装済み
 
-| ファイル | 内容 |
-|---|---|
-| [`RAiCA.html`](./RAiCA.html) | RA/CA業務画面 |
-| [`app.js`](./app.js) | DB/APIから画面データを取得し、再マッチング・推薦保存を行うフロント処理 |
-| [`server.py`](./server.py) | SQLite DBとAPIを持つPoCバックエンド（標準Pythonのみ） |
-| [`db/schema.sql`](./db/schema.sql) | 候補者・求人・企業・マッチング・接触ログ・アクションキューのDB定義 |
-| [`db/seed.sql`](./db/seed.sql) | 仕様書の正史に沿った初期データ |
-| [`data/README.md`](./data/README.md) | Porters CSV同期の入口仕様 |
-| [`docs/ロジック仕様書.md`](./docs/ロジック仕様書.md) | **裏側のロジック定義** — 全KPIの計算式・催促/フォローのルールエンジン・状態遷移・マッチングの根拠設計・デモデータの正史 |
-| [`docs/未決事項・リスクリスト.md`](./docs/未決事項・リスクリスト.md) | 未決事項・リスクの洗い出し（37項目）と現時点の方針 |
+- 候補者、企業、求人、AIマッチ、選考、対応キュー、連絡履歴
+- スキル35%、経験20%、日本語15%、給与15%、通勤15%の再スコアリング
+- 推薦承認から選考レコード作成までのトランザクション
+- Gmail、Zalo、Asana向けOutboxと再送処理
+- Porters候補者・求人APIの取得、正規化、upsert、同期履歴
+- 操作監査ログと任意APIキー認証
+- SQLite開発環境とPostgreSQL本番環境
+- Apple HIGを参考にした高密度・レスポンシブな業務UI
 
-## DB/APIつきで動かす
+## ローカル起動
 
 ```bash
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements-dev.txt
+cd frontend && npm install && npm run build && cd ..
 python3 server.py
 ```
 
-起動後に `http://127.0.0.1:8000` を開くと、既存の画面を表示しながら裏側でSQLite DBが初期化されます。
+`http://127.0.0.1:8000`でアプリ、`http://127.0.0.1:8000/docs`でOpenAPIを確認できます。
 
-主なAPI:
-
-| API | 内容 |
-|---|---|
-| `GET /api/health` | DB接続確認 |
-| `GET /api/stats` | 候補者数・求人数・マッチング件数・キュー件数 |
-| `GET /api/dashboard` | KPI・対応キュー・直近の操作履歴 |
-| `GET /api/candidates` | 候補者DB |
-| `GET /api/jobs` | 求人DB |
-| `GET /api/matches?job_id=job-a-phase2` | AI推薦候補と根拠 |
-| `GET /api/queue?role=ra` | RA/CA別の対応キュー |
-| `GET /api/applications` | 候補者×求人の選考プロセス |
-| `POST /api/matching/run` | 求人条件に基づく5軸スコアの再計算 |
-| `PATCH /api/matches/:id` | 推薦・却下・選考中の状態保存 |
-| `PATCH /api/queue/:id` | 対応キューの完了・スヌーズ |
-| `POST /api/contacts` | 人間承認済みの連絡を記録し、キューを完了 |
-| `POST /api/import/candidates` | `data/` 内のPorters候補者CSVを取り込み |
-
-画面上の求人DB・候補者DB・推薦候補はAPIから取得します。推薦ボタンはDBに選考レコードを作成し、AI再マッチングはスキル35%・経験20%・日本語15%・給与15%・通勤15%で再計算した結果をSQLiteへ保存します。
-
-## 動作確認
+開発時にフロントのホットリロードを使う場合:
 
 ```bash
-python3 -m unittest tests/test_backend.py
+make dev-api
+make dev-web
 ```
 
-## デモの見方
+フロントは`http://127.0.0.1:5173`です。
 
-1. `RAiCA.html` をダウンロード（右上 Download raw file）→ ブラウザで開く
-2. 右上の **RA / CA** トグルで両ロールの画面を切替（同じ案件を両側から見る作りです）
-3. 言語は 日本語 / Tiếng Việt / English を切替可能
-4. 見どころ：
-   - **マイデスク** … 目標ペース・自分ボール/相手待ち・催促/フォローキュー（3営業日/2営業日ルール＋AI学習値による前倒し判定）
-   - **推薦候補** … 案件起点のAI推薦（根拠＝①成約類似 ②NG照合 ③経歴書引用。スコアは参考値）
-   - **休眠掘り起こし** … 候補者/企業の再活性化（AI下書き→人間承認のHITL、出典表示つき）
+## PostgreSQL/Docker
 
-## 前提と割り切り（正直に）
+```bash
+docker compose up --build
+```
 
-- 画面の数値は仕様書の定義に基づく**想定値のモック**です
-- 個人名・企業名はすべて架空です
+PostgreSQLの永続ボリュームを使用し、ビルド済みフロントをFastAPIから配信します。
+
+## 外部連携
+
+`.env.example`を`.env`へ複製して認証情報を設定します。秘密情報はGitへ入れません。
+
+| 連携 | 環境変数 | 動作 |
+|---|---|---|
+| Porters | `RAICA_PORTERS_*` | 候補者・求人APIを取得しDBへupsert |
+| Gmail | `RAICA_GMAIL_WEBHOOK_URL` | 承認済み企業メールをOutbox経由で送信 |
+| Zalo OA | `RAICA_ZALO_WEBHOOK_URL` | 承認済み候補者メッセージを送信 |
+| Asana | `RAICA_ASANA_WEBHOOK_URL` | 電話・フォロータスクを外部同期 |
+
+接続先が未設定・障害中でもイベントは`outbox_events`へ残り、画面から再送できます。
+
+## API
+
+| Method | Path | 内容 |
+|---|---|---|
+| GET | `/api/v1/dashboard` | KPI、パイプライン、優先対応、操作履歴 |
+| GET | `/api/v1/candidates` | 候補者検索・状態フィルタ |
+| GET | `/api/v1/jobs` | 求人一覧 |
+| POST | `/api/v1/jobs/{id}/matches/run` | 5軸マッチング再計算 |
+| PATCH | `/api/v1/matches/{id}` | 推薦承認・見送り |
+| GET/PATCH | `/api/v1/actions` | RA/CA対応キュー |
+| POST | `/api/v1/contacts` | HITL承認済み連絡をOutboxへ登録 |
+| POST | `/api/v1/sync/porters` | Porters API同期 |
+| GET | `/api/v1/integrations` | 外部接続状態 |
+| GET | `/api/v1/outbox` | 外部送信キュー |
+| GET | `/api/v1/audit` | 監査ログ |
+
+## 検証
+
+```bash
+make test
+```
+
+個人名・企業名・業務数値はPoC用の架空データです。
