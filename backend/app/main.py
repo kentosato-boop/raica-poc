@@ -26,8 +26,8 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         seed_database(db)
         for job in db.query(Job).all():
-            if job.ai_candidate_count == 0:
-                run_matching(db, job.id, "seed")
+            if job.status != "closed":
+                run_matching(db, job.id, "startup")
     yield
 
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import uuid
+import base64
+import mimetypes
 from datetime import date, datetime, timezone
+from email.message import EmailMessage
 from typing import Any
 
 import httpx
@@ -44,6 +47,7 @@ def upsert_candidates(db: Session, records: list[dict[str, Any]]) -> int:
         candidate.name = str(record["name"])
         candidate.status = str(record.get("status") or "active")
         candidate.ca_owner = str(record.get("ca_owner") or record.get("owner") or "unassigned")
+        candidate.email = record.get("email")
         candidate.role_title = str(record.get("role_title") or record.get("title") or "未分類")
         candidate.age = int(record["age"]) if record.get("age") not in (None, "") else None
         candidate.gender = record.get("gender")
@@ -52,7 +56,14 @@ def upsert_candidates(db: Session, records: list[dict[str, Any]]) -> int:
         candidate.desired_salary_million = float(record["desired_salary_million"]) if record.get("desired_salary_million") not in (None, "") else None
         candidate.commute_minutes = int(record["commute_minutes"]) if record.get("commute_minutes") not in (None, "") else None
         candidate.work_style = str(record.get("work_style") or "onsite")
+        candidate.remote_preference = str(record.get("remote_preference") or record.get("work_style") or "flexible")
+        candidate.specialization = record.get("specialization")
+        candidate.specialization_years = float(record.get("specialization_years") or 0)
+        candidate.recent_tenure_years = float(record.get("recent_tenure_years") or 0)
         candidate.skills = as_list(record.get("skills"))
+        candidate.internal_parallel_count = int(record.get("internal_parallel_count") or 0)
+        candidate.external_parallel_count = int(record.get("external_parallel_count") or 0)
+        candidate.current_processes = record.get("current_processes") if isinstance(record.get("current_processes"), list) else []
         candidate.last_contact_date = parse_date(record.get("last_contact_date"))
         candidate.avg_response_days = float(record["avg_response_days"]) if record.get("avg_response_days") not in (None, "") else None
         candidate.notes = record.get("notes")
@@ -70,7 +81,7 @@ def upsert_jobs(db: Session, records: list[dict[str, Any]]) -> int:
         company_id = str(record.get("company_id") or f"porters-company-{company_name.lower().replace(' ', '-')}")
         company = db.get(Company, company_id)
         if not company:
-            company = Company(id=company_id, name=company_name, industry=str(record.get("industry") or "other"))
+            company = Company(id=company_id, name=company_name, industry=str(record.get("industry") or "other"), ra_owner=str(record.get("ra_owner") or "RA 太郎"))
             db.add(company)
         job = db.query(Job).filter(Job.porters_id == porters_id).one_or_none()
         if not job:
@@ -86,6 +97,11 @@ def upsert_jobs(db: Session, records: list[dict[str, Any]]) -> int:
         job.salary_max_million = float(record["salary_max_million"]) if record.get("salary_max_million") not in (None, "") else None
         job.received_date = parse_date(record.get("received_date")) or date.today()
         job.min_experience_years = float(record.get("min_experience_years") or 0)
+        job.preferred_age_min = int(record["preferred_age_min"]) if record.get("preferred_age_min") not in (None, "") else None
+        job.preferred_age_max = int(record["preferred_age_max"]) if record.get("preferred_age_max") not in (None, "") else None
+        job.remote_mode = str(record.get("remote_mode") or "onsite")
+        job.specialization = record.get("specialization")
+        job.min_specialization_years = float(record.get("min_specialization_years") or 0)
         job.min_jlpt = record.get("min_jlpt")
         job.max_commute_minutes = int(record["max_commute_minutes"]) if record.get("max_commute_minutes") not in (None, "") else None
         job.required_skills = as_list(record.get("required_skills"))
@@ -97,7 +113,7 @@ def integration_snapshot(db: Session, settings: Settings) -> list[dict[str, Any]
     result = []
     for provider in ("porters", "gmail", "zalo", "asana"):
         connection = db.get(IntegrationConnection, provider)
-        configured = bool(settings.porters_token and settings.porters_candidates_url) if provider == "porters" else bool(settings.provider_url(provider))
+        configured = bool(settings.porters_token and settings.porters_candidates_url) if provider == "porters" else settings.gmail_configured if provider == "gmail" else bool(settings.provider_url(provider))
         result.append({
             "provider": provider,
             "configured": configured,
@@ -121,13 +137,16 @@ def test_integration(db: Session, settings: Settings, provider: str, actor: str)
                 raise ValueError("PORTERS_TOKEN and PORTERS_CANDIDATES_URL are required")
             url = settings.porters_candidates_url
             headers = {"Authorization": f"Bearer {settings.porters_token}"}
+        elif provider == "gmail" and settings.gmail_access_token:
+            url = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+            headers = {"Authorization": f"Bearer {settings.gmail_access_token}"}
         else:
             url = settings.provider_url(provider)
             if not url:
                 raise ValueError(f"{provider.upper()}_WEBHOOK_URL is required")
             headers = {}
         with httpx.Client(timeout=settings.integration_timeout_seconds) as client:
-            if provider == "porters":
+            if provider in {"porters", "gmail"} and headers:
                 response = client.get(url, headers=headers, params={"limit": 1})
             else:
                 response = client.post(url, json={"event": "raica.connection.test", "provider": provider})
@@ -153,6 +172,41 @@ def enqueue_event(db: Session, provider: str, event_type: str, aggregate_id: str
 def dispatch_event(db: Session, settings: Settings, event: OutboxEvent) -> OutboxEvent:
     url = settings.provider_url(event.provider)
     event.attempts += 1
+    if event.provider == "gmail" and settings.gmail_access_token and settings.gmail_sender:
+        payload = event.payload
+        recipient = payload.get("recipient")
+        if not recipient:
+            event.status = "pending"
+            event.last_error = "Gmail recipient is required"
+            db.commit()
+            return event
+        message = EmailMessage()
+        message["To"] = recipient
+        message["From"] = settings.gmail_sender
+        message["Subject"] = payload.get("subject") or "RAiCA recommendation"
+        message.set_content(payload.get("body") or "")
+        if payload.get("attachment_base64") and payload.get("attachment_name"):
+            attachment = base64.b64decode(payload["attachment_base64"])
+            mime_type, _ = mimetypes.guess_type(payload["attachment_name"])
+            maintype, subtype = (mime_type or "application/octet-stream").split("/", 1)
+            message.add_attachment(attachment, maintype=maintype, subtype=subtype, filename=payload["attachment_name"])
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode().rstrip("=")
+        try:
+            with httpx.Client(timeout=settings.integration_timeout_seconds) as client:
+                response = client.post(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                    headers={"Authorization": f"Bearer {settings.gmail_access_token}"},
+                    json={"raw": raw},
+                )
+                response.raise_for_status()
+            event.status = "delivered"
+            event.processed_at = utc_now()
+            event.last_error = None
+        except httpx.HTTPError as exc:
+            event.status = "failed"
+            event.last_error = str(exc)
+        db.commit()
+        return event
     if not url:
         event.status = "pending"
         event.last_error = f"{event.provider.upper()}_WEBHOOK_URL is not configured"

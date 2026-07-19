@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     porters_jobs_url: str | None = None
     porters_token: str | None = None
     gmail_webhook_url: str | None = None
+    gmail_access_token: str | None = None
+    gmail_sender: str | None = None
     zalo_webhook_url: str | None = None
     asana_webhook_url: str | None = None
     integration_timeout_seconds: float = 15.0
@@ -40,6 +42,10 @@ class Settings(BaseSettings):
             "zalo": self.zalo_webhook_url,
             "asana": self.asana_webhook_url,
         }.get(provider)
+
+    @property
+    def gmail_configured(self) -> bool:
+        return bool(self.gmail_access_token and self.gmail_sender) or bool(self.gmail_webhook_url)
 
 
 @lru_cache
