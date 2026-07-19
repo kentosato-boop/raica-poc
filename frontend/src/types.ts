@@ -18,6 +18,9 @@ export interface DashboardData {
   pipeline_scope: string;
   companies: string[];
   actions: ActionItem[];
+  my_actions: ActionItem[];
+  waiting_actions: ActionItem[];
+  targets: { recommendations: number; interviews: number; closed_won: number; new_jobs: number };
   activity: AuditItem[];
 }
 
@@ -33,9 +36,11 @@ export interface Candidate {
   gender: string | null;
   years_experience: number;
   jlpt: string | null;
+  current_salary_million: number | null;
   desired_salary_million: number | null;
   commute_minutes: number | null;
   work_style: string;
+  work_style_options: string[];
   remote_preference: string;
   specialization: string | null;
   specialization_years: number;
@@ -104,6 +109,7 @@ export interface MatchItem {
 export interface ActionItem {
   id: string;
   owner_role: "ra" | "ca";
+  ball_owner: "mine" | "theirs";
   queue_type: string;
   target_label: string;
   due_date: string;

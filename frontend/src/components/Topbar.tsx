@@ -19,10 +19,10 @@ export function Topbar({ role, onRole, search, onSearch, dark, onDark, onMenu, n
         <button className={role === "ra" ? "selected" : ""} onClick={() => onRole("ra")}>RA</button>
         <button className={role === "ca" ? "selected" : ""} onClick={() => onRole("ca")}>CA</button>
       </div>
-      <select className="language-select" value={locale} onChange={event => onLocale(event.target.value as Locale)} aria-label="Language"><option value="ja">JP</option><option value="vi">VI</option><option value="en">EN</option></select>
+      <div className="segmented language-segment" aria-label="Language"><button className={locale === "ja" ? "selected" : ""} onClick={() => onLocale("ja")}>日本語</button><button className={locale === "vi" ? "selected" : ""} onClick={() => onLocale("vi")}>Tiếng Việt</button><button className={locale === "en" ? "selected" : ""} onClick={() => onLocale("en")}>English</button></div>
       <button className="icon-button theme-toggle" onClick={onDark} title={dark ? "ライト表示" : "ダーク表示"}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button>
       <button className="icon-button notification-button" title="通知"><Bell size={18} /><span /></button>
-      <div className="user-avatar" title={role === "ra" ? "RA 太郎" : "CA Hương"}>{role === "ra" ? "RT" : "CH"}</div>
+      <div className="topbar-user"><span><strong>{role === "ra" ? "RA 太郎" : "CA Hương"}</strong><small>{role === "ra" ? "RA（企業担当）" : "CA（候補者担当）"} · GA Vietnam</small></span><div className="user-avatar">{role === "ra" ? "RT" : "CH"}</div></div>
     </header>
   );
 }

@@ -1,5 +1,7 @@
 *.sqlite3
 data/skill_sheets/
+design-qa-implementation.png
+design-qa-comparison.jpg
 .env
 .venv/
 __pycache__/

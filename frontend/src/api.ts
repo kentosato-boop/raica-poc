@@ -22,6 +22,8 @@ export const api = {
   candidates: (query = "", status = "") => request<Candidate[]>(`/api/v1/candidates?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`),
   candidate: (candidateId: string) => request<Candidate>(`/api/v1/candidates/${candidateId}`),
   uploadSkillSheet: (candidateId: string, file: File) => { const form = new FormData(); form.append("file", file); return request<{ candidate: Candidate; analysis: { skills: string[]; specialization: string | null; specialization_years: number } }>(`/api/v1/candidates/${candidateId}/skill-sheet`, { method: "POST", body: form }); },
+  skillSheetUrl: (candidateId: string) => `/api/v1/candidates/${candidateId}/skill-sheet`,
+  candidateMatches: (candidateId: string) => request<MatchItem[]>(`/api/v1/candidates/${candidateId}/matches`),
   jobs: (query = "") => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}`),
   matches: (jobId: string) => request<MatchItem[]>(`/api/v1/jobs/${jobId}/matches`),
   rerunMatches: (jobId: string, actor: string) => request<{ generated: number; matches: MatchItem[] }>(`/api/v1/jobs/${jobId}/matches/run`, { method: "POST", body: JSON.stringify({ actor }) }),

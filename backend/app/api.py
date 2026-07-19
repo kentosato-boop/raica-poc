@@ -6,6 +6,7 @@ from pathlib import Path
 import base64
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -34,9 +35,11 @@ def candidate_dict(candidate: Candidate) -> dict:
         "gender": candidate.gender,
         "years_experience": candidate.years_experience,
         "jlpt": candidate.jlpt,
+        "current_salary_million": candidate.current_salary_million,
         "desired_salary_million": candidate.desired_salary_million,
         "commute_minutes": candidate.commute_minutes,
         "work_style": candidate.work_style,
+        "work_style_options": candidate.work_style_options,
         "remote_preference": candidate.remote_preference,
         "specialization": candidate.specialization,
         "specialization_years": candidate.specialization_years,
@@ -121,6 +124,7 @@ def action_dict(item: ActionItem) -> dict:
     return {
         "id": item.id,
         "owner_role": item.owner_role,
+        "ball_owner": item.ball_owner,
         "queue_type": item.queue_type,
         "target_label": item.target_label,
         "due_date": item.due_date,
@@ -160,7 +164,9 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
     stages: dict[str, int] = {}
     for item in scoped_applications:
         stages[item.stage] = stages.get(item.stage, 0) + 1
-    actions = db.scalars(select(ActionItem).where(ActionItem.status == "open", ActionItem.owner_role == role).order_by(ActionItem.due_date, ActionItem.severity).limit(8)).all()
+    actions = db.scalars(select(ActionItem).where(ActionItem.status == "open", ActionItem.owner_role == role).order_by(ActionItem.due_date, ActionItem.severity).limit(12)).all()
+    my_actions = [item for item in actions if item.ball_owner == "mine"]
+    waiting_actions = [item for item in actions if item.ball_owner == "theirs"]
     activity = db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(8)).all()
     company_names = []
     if role == "ra":
@@ -169,6 +175,9 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
         "counts": counts,
         "pipeline": stages,
         "actions": [action_dict(item) for item in actions],
+        "my_actions": [action_dict(item) for item in my_actions[:4]],
+        "waiting_actions": [action_dict(item) for item in waiting_actions[:4]],
+        "targets": {"recommendations": 20, "interviews": 12, "closed_won": 3, "new_jobs": 6},
         "pipeline_scope": f"{owner}の担当企業" if role == "ra" else f"{owner}の担当候補者",
         "companies": company_names,
         "activity": [{"id": item.id, "actor": item.actor, "action": item.action, "entity_type": item.entity_type, "entity_id": item.entity_id, "details": item.details, "created_at": item.created_at} for item in activity],
@@ -228,6 +237,27 @@ async def upload_skill_sheet(candidate_id: str, file: UploadFile = File(...), db
     db.commit()
     db.refresh(candidate)
     return {"candidate": candidate_dict(candidate), "analysis": analysis}
+
+
+@router.get("/candidates/{candidate_id}/skill-sheet", response_class=FileResponse)
+def download_skill_sheet(candidate_id: str, db: Session = Depends(get_db)) -> FileResponse:
+    candidate = db.get(Candidate, candidate_id)
+    if not candidate or not candidate.skill_sheet_path:
+        raise HTTPException(status_code=404, detail="skill sheet not found")
+    path = Path(candidate.skill_sheet_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="skill sheet file is missing")
+    return FileResponse(path, filename=candidate.skill_sheet_filename or path.name)
+
+
+@router.get("/candidates/{candidate_id}/matches")
+def candidate_matches(candidate_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    if not db.get(Candidate, candidate_id):
+        raise HTTPException(status_code=404, detail="candidate not found")
+    statement = select(Match).where(Match.candidate_id == candidate_id).options(
+        selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)
+    ).order_by(Match.score.desc())
+    return [match_dict(item) for item in db.scalars(statement).all()]
 
 
 @router.get("/jobs")

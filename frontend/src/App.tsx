@@ -1,18 +1,19 @@
 import { CheckCircle2, CircleAlert, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { RecommendationComposer } from "./components/RecommendationComposer";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { createTranslator, I18nProvider, type Locale } from "./i18n";
 import type { ActionItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, SyncRun, ViewKey } from "./types";
-import { ActionsView } from "./views/ActionsView";
-import { CandidatesView } from "./views/CandidatesView";
 import { DashboardView } from "./views/DashboardView";
-import { IntegrationsView } from "./views/IntegrationsView";
-import { JobsView } from "./views/JobsView";
-import { MatchingView } from "./views/MatchingView";
-import { RevivalView } from "./views/RevivalView";
+
+const ActionsView = lazy(() => import("./views/ActionsView").then(module => ({ default: module.ActionsView })));
+const CandidatesView = lazy(() => import("./views/CandidatesView").then(module => ({ default: module.CandidatesView })));
+const IntegrationsView = lazy(() => import("./views/IntegrationsView").then(module => ({ default: module.IntegrationsView })));
+const JobsView = lazy(() => import("./views/JobsView").then(module => ({ default: module.JobsView })));
+const MatchingView = lazy(() => import("./views/MatchingView").then(module => ({ default: module.MatchingView })));
+const RevivalView = lazy(() => import("./views/RevivalView").then(module => ({ default: module.RevivalView })));
 
 type Toast = { message: string; tone: "success" | "error" } | null;
 
@@ -34,6 +35,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [matches, setMatches] = useState<MatchItem[]>([]);
+  const [candidateMatches, setCandidateMatches] = useState<MatchItem[]>([]);
   const [matchingBusy, setMatchingBusy] = useState(false);
   const [draft, setDraft] = useState<RecommendationDraft | null>(null);
   const [sending, setSending] = useState(false);
@@ -70,7 +72,7 @@ export default function App() {
 
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; localStorage.setItem("raica-theme", dark ? "dark" : "light"); }, [dark]);
   useEffect(() => { localStorage.setItem("raica-locale", locale); document.documentElement.lang = locale; }, [locale]);
-  useEffect(() => { api.health().then(() => setApiOnline(true)).catch(() => setApiOnline(false)); loadDashboard(); loadJobs(); }, [loadDashboard, loadJobs]);
+  useEffect(() => { api.health().then(() => setApiOnline(true)).catch(() => setApiOnline(false)); loadJobs(); }, [loadJobs]);
   useEffect(() => { setSearch(""); loadDashboard(); }, [role, loadDashboard]);
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [view, role, search, candidateStatus, notify]);
   useEffect(() => { if (view === "jobs") { const timer = window.setTimeout(() => loadJobs(role === "ca" ? search : ""), 180); return () => window.clearTimeout(timer); } }, [view, role, search, loadJobs]);
-  useEffect(() => { if (selectedJobId && view === "matching") api.matches(selectedJobId).then(setMatches).catch(error => notify(error.message, "error")); }, [view, selectedJobId, notify]);
+  useEffect(() => { if (selectedJobId && (view === "matching" || view === "jobs")) api.matches(selectedJobId).then(setMatches).catch(error => notify(error.message, "error")); }, [view, selectedJobId, notify]);
   useEffect(() => { if (view === "actions") api.actions(role, actionStatus).then(setActions).catch(error => notify(error.message, "error")); }, [view, role, actionStatus, notify]);
   useEffect(() => { if (view === "integrations") loadIntegrations(); }, [view, loadIntegrations]);
 
@@ -98,6 +100,11 @@ export default function App() {
       setCandidates(items => items.map(item => item.id === result.candidate.id ? result.candidate : item));
       notify(`${file.name}: ${result.analysis.skills.length} skills imported`);
     } catch (error) { notify((error as Error).message, "error"); } finally { setUploading(false); }
+  };
+  const loadCandidateMatches = async () => {
+    if (!selectedCandidate) return;
+    try { setCandidateMatches(await api.candidateMatches(selectedCandidate.id)); }
+    catch (error) { notify((error as Error).message, "error"); }
   };
   const rerunMatching = async () => {
     if (!selectedJobId) return;
@@ -133,15 +140,15 @@ export default function App() {
       {navVisible && <Sidebar view={view} onChange={setView} open={sidebarOpen} onClose={() => setSidebarOpen(false)} openActions={dashboard?.counts.open_actions ?? 0} />}
       <div className="app-main">
         <Topbar role={role} onRole={setRole} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} />
-        <main className="main-content">
+        <main className="main-content"><Suspense fallback={<div className="view-loading" aria-label="読み込み中"><i /><span>Loading</span></div>}>
           {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} />}
-          {view === "candidates" && <CandidatesView candidates={candidates} selected={selectedCandidate} onSelect={setSelectedCandidate} status={candidateStatus} onStatus={setCandidateStatus} onMatching={() => openMatching()} onUpload={uploadSkillSheet} uploading={uploading} />}
-          {view === "jobs" && <JobsView jobs={jobs} onMatching={openMatching} />}
+          {view === "candidates" && <CandidatesView role={role} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} uploading={uploading} />}
+          {view === "jobs" && <JobsView role={role} jobs={jobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "matching" && <MatchingView jobs={jobs} selectedJobId={selectedJobId} onJob={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "revival" && <RevivalView candidates={candidates} onSelect={candidate => { setSelectedCandidate(candidate); setView("candidates"); }} />}
           {view === "actions" && <ActionsView actions={actions} role={role} onRole={setRole} status={actionStatus} onStatus={setActionStatus} onUpdate={updateAction} />}
           {view === "integrations" && <IntegrationsView integrations={integrations} syncRuns={syncRuns} outbox={outbox} busy={integrationBusy} onTest={testIntegration} onSync={syncPorters} onRetry={retryOutbox} />}
-        </main>
+        </Suspense></main>
       </div>
       {sidebarOpen && <button className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-label="Close menu" />}
       {draft && <RecommendationComposer draft={draft} sending={sending} onClose={() => setDraft(null)} onSend={sendRecommendation} />}
