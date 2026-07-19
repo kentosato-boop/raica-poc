@@ -16,8 +16,32 @@
 | ファイル | 内容 |
 |---|---|
 | [`RAiCA.html`](./RAiCA.html) | デモ本体（単一HTML・ダウンロードしてブラウザで開くだけで動きます） |
+| [`server.py`](./server.py) | SQLite DBとAPIを持つPoCバックエンド（標準Pythonのみ） |
+| [`db/schema.sql`](./db/schema.sql) | 候補者・求人・企業・マッチング・接触ログ・アクションキューのDB定義 |
+| [`db/seed.sql`](./db/seed.sql) | 仕様書の正史に沿った初期データ |
+| [`data/README.md`](./data/README.md) | Porters CSV同期の入口仕様 |
 | [`docs/ロジック仕様書.md`](./docs/ロジック仕様書.md) | **裏側のロジック定義** — 全KPIの計算式・催促/フォローのルールエンジン・状態遷移・マッチングの根拠設計・デモデータの正史 |
 | [`docs/未決事項・リスクリスト.md`](./docs/未決事項・リスクリスト.md) | 未決事項・リスクの洗い出し（37項目）と現時点の方針 |
+
+## DB/APIつきで動かす
+
+```bash
+python3 server.py
+```
+
+起動後に `http://127.0.0.1:8000` を開くと、既存の画面を表示しながら裏側でSQLite DBが初期化されます。
+
+主なAPI:
+
+| API | 内容 |
+|---|---|
+| `GET /api/health` | DB接続確認 |
+| `GET /api/stats` | 候補者数・求人数・マッチング件数・キュー件数 |
+| `GET /api/candidates` | 候補者DB |
+| `GET /api/jobs` | 求人DB |
+| `GET /api/matches?job_id=job-a-phase2` | AI推薦候補と根拠 |
+| `GET /api/queue?role=ra` | RA/CA別の対応キュー |
+| `POST /api/import/candidates` | Porters候補者CSVの取り込み |
 
 ## デモの見方
 
@@ -33,4 +57,3 @@
 
 - 画面の数値は仕様書の定義に基づく**想定値のモック**です
 - 個人名・企業名はすべて架空です
-
