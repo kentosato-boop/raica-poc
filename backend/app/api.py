@@ -130,7 +130,27 @@ def match_dict(item: Match) -> dict:
     }
 
 
-def action_dict(item: ActionItem) -> dict:
+def resolve_action_target(item: ActionItem, db: Session) -> tuple[str | None, str | None]:
+    """source_ref を画面遷移可能なターゲット（候補者）へ解決する。
+
+    - cand-*: 候補者を直接指す。
+    - app-*: 応募（候補者×案件）。担当者が動かす対象は候補者本人なので候補者へ寄せる。
+    - それ以外/None: 遷移先なし（一覧へフォールバック）。
+    """
+    ref = item.source_ref
+    if not ref:
+        return None, None
+    if ref.startswith("cand-"):
+        return ("candidate", ref) if db.get(Candidate, ref) else (None, None)
+    if ref.startswith("app-"):
+        application = db.get(Application, ref)
+        if application:
+            return "candidate", application.candidate_id
+    return None, None
+
+
+def action_dict(item: ActionItem, db: Session) -> dict:
+    target_type, target_id = resolve_action_target(item, db)
     return {
         "id": item.id,
         "owner_role": item.owner_role,
@@ -142,6 +162,8 @@ def action_dict(item: ActionItem) -> dict:
         "reason": item.reason,
         "status": item.status,
         "source_ref": item.source_ref,
+        "target_type": target_type,
+        "target_id": target_id,
     }
 
 
@@ -164,7 +186,7 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
         "dormant_candidates": db.scalar(select(func.count()).select_from(Candidate).where(Candidate.status == "dormant")) or 0,
         "open_jobs": db.scalar(select(func.count()).select_from(Job).where(Job.status != "closed")) or 0,
         "applications": db.scalar(select(func.count()).select_from(Application)) or 0,
-        "open_actions": db.scalar(select(func.count()).select_from(ActionItem).where(ActionItem.status == "open")) or 0,
+        "open_actions": db.scalar(select(func.count()).select_from(ActionItem).where(ActionItem.status == "open", ActionItem.owner_role == role)) or 0,
         "pending_outbox": db.scalar(select(func.count()).select_from(OutboxEvent).where(OutboxEvent.status.in_(["pending", "failed"]))) or 0,
         "recommendations": recommendation_count,
         "interviews": interview_count,
@@ -184,9 +206,9 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
     return {
         "counts": counts,
         "pipeline": stages,
-        "actions": [action_dict(item) for item in actions],
-        "my_actions": [action_dict(item) for item in my_actions[:4]],
-        "waiting_actions": [action_dict(item) for item in waiting_actions[:4]],
+        "actions": [action_dict(item, db) for item in actions],
+        "my_actions": [action_dict(item, db) for item in my_actions[:4]],
+        "waiting_actions": [action_dict(item, db) for item in waiting_actions[:4]],
         "targets": {"recommendations": 20, "interviews": 12, "closed_won": 3, "new_jobs": 6},
         "pipeline_scope": f"{owner}の担当企業" if role == "ra" else f"{owner}の担当候補者",
         "companies": company_names,
@@ -470,7 +492,7 @@ def actions(role: str | None = None, item_status: str | None = Query(default=Non
         statement = statement.where(ActionItem.owner_role == role)
     if item_status:
         statement = statement.where(ActionItem.status == item_status)
-    return [action_dict(item) for item in db.scalars(statement.order_by(ActionItem.status, ActionItem.due_date)).all()]
+    return [action_dict(item, db) for item in db.scalars(statement.order_by(ActionItem.status, ActionItem.due_date)).all()]
 
 
 @router.patch("/actions/{action_id}")
@@ -481,7 +503,7 @@ def update_action(action_id: str, payload: ActionUpdate, db: Session = Depends(g
     item.status = payload.status
     db.add(AuditLog(actor=payload.actor, action="action.status", entity_type="action", entity_id=item.id, details={"status": payload.status}))
     db.commit()
-    return action_dict(item)
+    return action_dict(item, db)
 
 
 @router.post("/contacts", status_code=status.HTTP_201_CREATED)

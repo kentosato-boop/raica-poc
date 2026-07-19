@@ -153,6 +153,16 @@ export default function App() {
     } catch (error) { notify((error as Error).message, "error"); } finally { setSending(false); }
   };
   const updateAction = async (id: string, status: "done" | "open" | "snoozed") => { try { await api.updateAction(id, status, actor); setActions(await api.actions(role, actionStatus)); await loadDashboard(); notify("Task updated"); } catch (error) { notify((error as Error).message, "error"); } };
+  const openAction = async (item: ActionItem) => {
+    if (item.target_type === "candidate" && item.target_id) {
+      try {
+        const candidate = await api.candidate(item.target_id);
+        setSelectedCandidate(candidate); setCandidateMatches([]); setCandidateStatus(""); setView("candidates");
+        return;
+      } catch (error) { notify((error as Error).message, "error"); }
+    }
+    setView("actions");
+  };
   const testIntegration = async (provider: string) => { setIntegrationBusy(provider); try { const result = await api.testIntegration(provider, actor); await loadIntegrations(); notify(result.status === "connected" ? `${provider} connected` : result.error || "Configuration required", result.status === "connected" ? "success" : "error"); } catch (error) { notify((error as Error).message, "error"); } finally { setIntegrationBusy(""); } };
   const syncPorters = async () => { setIntegrationBusy("porters"); try { const result = await api.syncPorters(actor); await Promise.all([loadIntegrations(), loadJobs(), loadDashboard()]); notify(result.status === "completed" ? `${result.records_written} records synced` : result.error_message || "Porters configuration required", result.status === "completed" ? "success" : "error"); } catch (error) { notify((error as Error).message, "error"); } finally { setIntegrationBusy(""); } };
   const retryOutbox = async (eventId: string) => { try { await api.retryOutbox(eventId, actor); await loadIntegrations(); notify("Retry queued"); } catch (error) { notify((error as Error).message, "error"); } };
@@ -177,7 +187,7 @@ export default function App() {
       <div className="app-main">
         <Topbar role={role} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} onLogout={logout} />
         <main className="main-content"><Suspense fallback={<div className="view-loading" aria-label="読み込み中"><i /><span>Loading</span></div>}>
-          {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} onComplete={id => updateAction(id, "done")} onSnooze={id => updateAction(id, "snoozed")} />}
+          {view === "dashboard" && <DashboardView data={dashboard} role={role} onOpenActions={() => setView("actions")} onOpenAction={openAction} onComplete={id => updateAction(id, "done")} onSnooze={id => updateAction(id, "snoozed")} />}
           {view === "candidates" && <CandidatesView role={role} search={search} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} onDownload={downloadSkillSheet} uploading={uploading} />}
           {view === "jobs" && <JobsView role={role} search={search} jobs={jobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "matching" && <MatchingView jobs={jobs} selectedJobId={selectedJobId} onJob={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}

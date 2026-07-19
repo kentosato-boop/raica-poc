@@ -30,7 +30,13 @@ export function CandidatesView({ role, search, candidates, selected, onSelect, s
   const [location, setLocation] = useState("");
   const [parallel, setParallel] = useState("");
   const specializationOptions = useMemo(() => Array.from(new Set(candidates.map(candidate => candidate.specialization).filter(Boolean))).sort() as string[], [candidates]);
-  const locationOptions = useMemo(() => Array.from(new Set(candidates.map(candidate => candidate.current_location).filter(Boolean))).sort() as string[], [candidates]);
+  // 主要3都市は候補者の有無に関わらず常に選べるようにし、データにある他の地域も追加する。
+  const locationOptions = useMemo(() => {
+    const primary = ["Ha Noi", "Da Nang", "Ho Chi Minh"];
+    const fromData = candidates.map(candidate => candidate.current_location).filter(Boolean) as string[];
+    const extra = Array.from(new Set(fromData)).filter(value => !primary.includes(value)).sort();
+    return [...primary, ...extra];
+  }, [candidates]);
   const filteredCandidates = useMemo(() => candidates.filter(candidate => {
     const hasSpecialization = !specialization || candidate.specialization === specialization;
     const hasLocation = !location || candidate.current_location === location;

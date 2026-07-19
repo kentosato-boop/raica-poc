@@ -155,6 +155,8 @@ export interface ActionItem {
   reason: string;
   status: "open" | "done" | "snoozed";
   source_ref: string | null;
+  target_type: "candidate" | null;
+  target_id: string | null;
 }
 
 export interface Integration {

@@ -26,7 +26,7 @@ def test_health_and_dashboard():
         dashboard = client.get("/api/v1/dashboard").json()
         assert dashboard["counts"]["candidates"] == 12
         assert dashboard["counts"]["open_jobs"] == 10
-        assert dashboard["counts"]["open_actions"] == 11
+        assert dashboard["counts"]["open_actions"] == 8  # RA担当の未完了のみ（ロール別スコープ）
         assert dashboard["counts"]["recommendations"] >= 1
         assert dashboard["counts"]["closed_won"] == 1
         assert dashboard["pipeline_scope"] == "RA 太郎の担当企業"
