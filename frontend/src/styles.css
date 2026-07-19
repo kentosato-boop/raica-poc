@@ -472,6 +472,20 @@ body { background: var(--bg); }
 .queue-summary { min-height: 84px; padding: 16px 20px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; border-top: 1px solid var(--border); }
 .queue-summary strong { font-size: 22px; }
 .queue-summary span { color: var(--muted); font-size: 11px; }
+/* AI推薦（ルール選抜後の上位3名）の強調 */
+.ai-pick { margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 10px; font-weight: 700; vertical-align: middle; }
+.match-row.ai-pick-row, .recommendation-row.ai-pick-row { box-shadow: inset 3px 0 0 var(--blue); }
+.pipeline-hint { display: flex; align-items: center; gap: 6px; margin: 4px 0 10px; color: var(--muted); font-size: 12px; }
+/* 新規流入リードの通知 */
+.inflow-notice { padding: 14px 18px; display: grid; gap: 10px; }
+.inflow-notice-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text); }
+.inflow-notice-head strong { font-size: 14px; }
+.inflow-notice-head span { color: var(--muted); font-size: 12px; }
+.inflow-notice-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.inflow-chip { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-solid); text-align: left; cursor: pointer; transition: background 120ms ease; }
+.inflow-chip:hover { background: var(--surface-muted); }
+.inflow-chip strong { font-size: 12px; }
+.inflow-chip small { color: var(--muted); font-size: 10.5px; }
 .database-surface { overflow: hidden; }
 .database-table { min-width: 0; width: 100%; font-size: 11px; }
 .database-table th { height: 46px; padding: 0 14px; background: #f7f7f6; font-size: 9.5px; }

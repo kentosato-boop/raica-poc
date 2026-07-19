@@ -40,11 +40,11 @@ export function MatchingView({ jobs, selectedJobId, onJob, matches, loading, onR
       </div>
       <div className="matching-layout">
         <section className="surface match-list-surface">
-          <div className="section-head"><div><h2>{t("aiCandidates")}</h2><p>{filteredMatches.length}</p></div>{selectedJob && <Badge tone="info">AI</Badge>}</div>
+          <div className="section-head"><div><h2>{t("aiCandidates")}</h2><p>ルール選抜 {matches.length}名 → AI上位{Math.min(3, matches.length)}名を推薦</p></div>{selectedJob && <Badge tone="info">AI</Badge>}</div>
           {filteredMatches.length ? <div className="match-list">
-            {filteredMatches.map(item => <button key={item.id} className={`match-row ${selected?.id === item.id ? "selected" : ""}`} onClick={() => setSelected(item)}>
+            {filteredMatches.map(item => <button key={item.id} className={`match-row ${selected?.id === item.id ? "selected" : ""} ${item.ai_recommended ? "ai-pick-row" : ""}`} onClick={() => setSelected(item)}>
               <div className="person-avatar">{item.candidate_name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div>
-              <div className="match-person"><strong>{item.candidate_name}</strong><span>{item.candidate_role} · {item.candidate_experience}年 · {item.candidate_jlpt ?? "—"}</span><small>{t("internalParallel")} {item.candidate_internal_parallel} / {t("externalParallel")} {item.candidate_external_parallel}</small></div>
+              <div className="match-person"><strong>{item.candidate_name}{item.ai_recommended && <span className="ai-pick">AI推薦 #{item.ai_rank}</span>}</strong><span>{item.candidate_role} · {item.candidate_experience}年 · {item.candidate_jlpt ?? "—"}</span><small>{t("internalParallel")} {item.candidate_internal_parallel} / {t("externalParallel")} {item.candidate_external_parallel}</small></div>
               <div className="evidence-preview"><span><Check size={13} />{t("evidence")}</span><small>{item.evidence_quote}</small></div>
               <div className={`score-ring score-${item.score >= 90 ? "high" : item.score >= 80 ? "mid" : "low"}`}><strong>{item.score}</strong></div>
               <Badge tone={statusTone(item.recommendation_status)}>{item.recommendation_status}</Badge>

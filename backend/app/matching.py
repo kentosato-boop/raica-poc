@@ -31,6 +31,34 @@ SCORE_CAP = 98
 # soft 要因だけが満点でも、コア適合が低ければ推薦帯（70+）には届かない。
 CEILING_BASE = 55
 CEILING_SLOPE = 0.43
+# AI 分析ステージで「上位◯人」として強調する人数。
+AI_SHORTLIST_SIZE = 3
+
+
+def evaluate_rules(candidate: Candidate, job: Job) -> dict[str, list[str] | bool]:
+    """一次選抜（ルールベース）。案件要件から自動導出したハードルールで足切りする。
+
+    ここを通らない候補者は「会う価値なし」としてAI分析ステージへ進めない。
+    手動の閾値設定は不要で、案件が持つ要件そのものが基準になる。
+    """
+    required = set(job.required_skills or [])
+    actual = set(candidate.skills or [])
+    failures: list[str] = []
+    # 専門・スキル不一致: 専門領域が違い、専門をスキルとしても持たず、必須スキルも一つも重ならない。
+    if job.specialization and candidate.specialization != job.specialization and job.specialization not in actual and not (required & actual):
+        failures.append("専門・必須スキルの一致なし")
+    # 必須スキルが定義されているのに1つも一致しない。
+    elif required and not (required & actual):
+        failures.append("必須スキルの一致なし")
+    # 経験年数が要件の半分未満（大幅不足）。
+    if job.min_experience_years and candidate.years_experience < job.min_experience_years * 0.5:
+        failures.append("経験年数が要件の半分未満")
+    # 日本語が要件を2段階以上下回る（例: N2要件にN4）。
+    required_jlpt = JLPT_LEVEL.get(job.min_jlpt, 0)
+    actual_jlpt = JLPT_LEVEL.get(candidate.jlpt, 0)
+    if required_jlpt and actual_jlpt <= required_jlpt - 2:
+        failures.append("日本語が要件を大きく下回る")
+    return {"passed": not failures, "failures": failures}
 
 
 def score_candidate(candidate: Candidate, job: Job) -> dict[str, int | str]:
@@ -82,7 +110,6 @@ def score_candidate(candidate: Candidate, job: Job) -> dict[str, int | str]:
         **axes,
         "score": score,
         "core_fit": core_fit,
-        "similarity_pct": min(SCORE_CAP, round(score * 0.9 + len(shared) * 4)),
         "ng_check": "要件ずらし: " + ", ".join(issues) if issues else "主要条件にNGパターンなし",
         "evidence_quote": (
             f"コア適合 {core_fit}% / "
@@ -95,6 +122,13 @@ def score_candidate(candidate: Candidate, job: Job) -> dict[str, int | str]:
 
 
 def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]:
+    """2段構成のマッチング。
+
+    Stage 1（ルールベース一次選抜）: evaluate_rules で案件要件のハードルールに
+      掛け、明確に不適合な候補者を除外する（＝会う価値がある母集団に絞る）。
+    Stage 2（AI分析ステージ）: 通過者を score_candidate でスコアリングして順位付け。
+      上位 AI_SHORTLIST_SIZE 名を推薦フォーカスとして扱う。
+    """
     job = db.get(Job, job_id)
     if not job or job.status == "closed":
         raise ValueError("job not found or closed")
@@ -103,11 +137,13 @@ def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]
         item.candidate_id: item
         for item in db.scalars(select(Match).where(Match.job_id == job.id)).all()
     }
+    # --- Stage 1: rule-based screening ---
+    eligible = [candidate for candidate in candidates if evaluate_rules(candidate, job)["passed"]]
+    screened_out = len(candidates) - len(eligible)
+    # --- Stage 2: AI scoring on survivors ---
     generated: list[Match] = []
-    for candidate in candidates:
+    for candidate in eligible:
         values = score_candidate(candidate, job)
-        if int(values["score"]) < 70:
-            continue
         current = existing.get(candidate.id)
         if not current:
             current = Match(id=f"match-{job.id}-{candidate.id}", candidate_id=candidate.id, job_id=job.id, score=0, skill_score=0, experience_score=0, japanese_score=0, salary_score=0, commute_score=0, age_score=0, remote_score=0, specialization_score=0, stability_score=0, similarity_pct=0, ng_check="", evidence_quote="")
@@ -122,7 +158,7 @@ def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]
         current.remote_score = int(values["remote"])
         current.specialization_score = int(values["specialization"])
         current.stability_score = int(values["stability"])
-        current.similarity_pct = int(values["similarity_pct"])
+        current.similarity_pct = int(values["score"])  # score に一本化（旧 similarity 指標は廃止）
         current.ng_check = str(values["ng_check"])
         current.evidence_quote = str(values["evidence_quote"])
         generated.append(current)
@@ -133,7 +169,7 @@ def run_matching(db: Session, job_id: str, actor: str = "system") -> list[Match]
             db.delete(current)
             removed += 1
     job.ai_candidate_count = len(generated)
-    db.add(AuditLog(actor=actor, action="matching.run", entity_type="job", entity_id=job.id, details={"generated": len(generated), "removed_stale": removed, "weights": WEIGHTS, "date": date.today().isoformat()}))
+    db.add(AuditLog(actor=actor, action="matching.run", entity_type="job", entity_id=job.id, details={"eligible": len(generated), "screened_out": screened_out, "shortlist": AI_SHORTLIST_SIZE, "weights": WEIGHTS, "date": date.today().isoformat()}))
     db.commit()
     for item in generated:
         db.refresh(item)

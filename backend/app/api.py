@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 from .config import Settings, get_settings
 from .database import get_db
 from .integrations import dispatch_event, enqueue_event, integration_snapshot, sync_porters, test_integration
-from .matching import WEIGHTS, run_matching, score_candidate
+from .matching import AI_SHORTLIST_SIZE, WEIGHTS, run_matching, score_candidate
 from .models import ActionItem, Application, AuditLog, Candidate, Company, ContactLog, IntegrationConnection, Job, Match, OutboxEvent, SyncRun
 from .schemas import ActionUpdate, ActorRequest, ContactCreate, MatchDecision, OutboxRetry
 from .skill_sheets import analyze_skill_sheet, extract_text
@@ -93,8 +93,10 @@ def job_dict(job: Job) -> dict:
     }
 
 
-def match_dict(item: Match) -> dict:
+def match_dict(item: Match, rank: int | None = None) -> dict:
     return {
+        "ai_rank": rank,
+        "ai_recommended": rank is not None and rank <= AI_SHORTLIST_SIZE,
         "id": item.id,
         "candidate_id": item.candidate_id,
         "candidate_name": item.candidate.name,
@@ -122,7 +124,6 @@ def match_dict(item: Match) -> dict:
             "specialization": item.specialization_score,
             "stability": item.stability_score,
         },
-        "similarity_pct": item.similarity_pct,
         "ng_check": item.ng_check,
         "evidence_quote": item.evidence_quote,
         "recommendation_status": item.recommendation_status,
@@ -130,27 +131,32 @@ def match_dict(item: Match) -> dict:
     }
 
 
-def resolve_action_target(item: ActionItem, db: Session) -> tuple[str | None, str | None]:
-    """source_ref を画面遷移可能なターゲット（候補者）へ解決する。
+def resolve_action_target(item: ActionItem, db: Session, role: str | None = None) -> tuple[str | None, str | None]:
+    """source_ref を画面遷移可能なターゲットへ解決する。
 
-    - cand-*: 候補者を直接指す。
-    - app-*: 応募（候補者×案件）。担当者が動かす対象は候補者本人なので候補者へ寄せる。
+    ロールで着地先を変える（RAは企業/案件視点、CAは候補者視点）:
+    - RA: app-* → 案件（job）、cand-* → 候補者（案件が無いため）。
+    - CA: app-* / cand-* → 候補者。
     - それ以外/None: 遷移先なし（一覧へフォールバック）。
     """
     ref = item.source_ref
+    view_role = role or item.owner_role
     if not ref:
         return None, None
-    if ref.startswith("cand-"):
-        return ("candidate", ref) if db.get(Candidate, ref) else (None, None)
     if ref.startswith("app-"):
         application = db.get(Application, ref)
-        if application:
-            return "candidate", application.candidate_id
+        if not application:
+            return None, None
+        if view_role == "ra":
+            return "job", application.job_id
+        return "candidate", application.candidate_id
+    if ref.startswith("cand-"):
+        return ("candidate", ref) if db.get(Candidate, ref) else (None, None)
     return None, None
 
 
-def action_dict(item: ActionItem, db: Session) -> dict:
-    target_type, target_id = resolve_action_target(item, db)
+def action_dict(item: ActionItem, db: Session, role: str | None = None) -> dict:
+    target_type, target_id = resolve_action_target(item, db, role)
     return {
         "id": item.id,
         "owner_role": item.owner_role,
@@ -179,7 +185,7 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
     scoped_applications = db.scalars(application_scope).all()
     recommendation_count = sum(item.stage in {"recommended", "screening", "first_interview", "final_interview", "offer", "closed_won"} for item in scoped_applications)
     interview_count = sum(item.stage in {"first_interview", "final_interview"} for item in scoped_applications)
-    closed_won_count = sum(item.stage == "closed_won" or (item.company_ok and item.candidate_ok) for item in scoped_applications)
+    closed_won_count = sum(item.stage == "closed_won" for item in scoped_applications)  # 成約はステージ確定のみで判定（両OKフラグとの二重定義を廃止）
     counts = {
         "candidates": db.scalar(select(func.count()).select_from(Candidate)) or 0,
         "active_candidates": db.scalar(select(func.count()).select_from(Candidate).where(Candidate.status == "active")) or 0,
@@ -200,18 +206,34 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
     my_actions = [item for item in actions if item.ball_owner == "mine"]
     waiting_actions = [item for item in actions if item.ball_owner == "theirs"]
     activity = db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(8)).all()
+    # 新規流入リード: 直近に流入した稼働中候補者（CAは自分の担当のみ）。フォロー漏れ防止の通知。
+    inflow_window_days = 3
+    inflow_statement = select(Candidate).where(
+        Candidate.status == "active",
+        Candidate.inflow_date.is_not(None),
+        Candidate.inflow_date >= today - timedelta(days=inflow_window_days),
+    )
+    if role == "ca":
+        inflow_statement = inflow_statement.where(Candidate.ca_owner == owner)
+    new_inflow_candidates = db.scalars(inflow_statement.order_by(Candidate.inflow_date.desc())).all()
+    new_inflow = [
+        {"id": candidate.id, "name": candidate.name, "specialization": candidate.specialization, "role_title": candidate.role_title, "ca_owner": candidate.ca_owner, "inflow_days": (today - candidate.inflow_date).days}
+        for candidate in new_inflow_candidates
+    ]
+    counts["new_inflow"] = len(new_inflow)
     company_names = []
     if role == "ra":
         company_names = list(db.scalars(select(Company.name).where(Company.ra_owner == owner).order_by(Company.name)).all())
     return {
         "counts": counts,
         "pipeline": stages,
-        "actions": [action_dict(item, db) for item in actions],
-        "my_actions": [action_dict(item, db) for item in my_actions[:4]],
-        "waiting_actions": [action_dict(item, db) for item in waiting_actions[:4]],
+        "actions": [action_dict(item, db, role) for item in actions],
+        "my_actions": [action_dict(item, db, role) for item in my_actions[:4]],
+        "waiting_actions": [action_dict(item, db, role) for item in waiting_actions[:4]],
         "targets": {"recommendations": 20, "interviews": 12, "closed_won": 3, "new_jobs": 6},
         "pipeline_scope": f"{owner}の担当企業" if role == "ra" else f"{owner}の担当候補者",
         "companies": company_names,
+        "new_inflow": new_inflow,
         "activity": [{"id": item.id, "actor": item.actor, "action": item.action, "entity_type": item.entity_type, "entity_id": item.entity_id, "details": item.details, "created_at": item.created_at} for item in activity],
     }
 
@@ -374,7 +396,7 @@ def candidate_matches(candidate_id: str, db: Session = Depends(get_db)) -> list[
     statement = select(Match).where(Match.candidate_id == candidate_id).options(
         selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)
     ).order_by(Match.score.desc())
-    return [match_dict(item) for item in db.scalars(statement).all()]
+    return [match_dict(item, rank=index + 1) for index, item in enumerate(db.scalars(statement).all())]
 
 
 @router.get("/jobs")
@@ -444,7 +466,7 @@ def build_recommendation_draft(item: Match) -> dict:
 @router.get("/jobs/{job_id}/matches")
 def matches(job_id: str, db: Session = Depends(get_db)) -> list[dict]:
     statement = select(Match).where(Match.job_id == job_id).options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)).order_by(Match.score.desc())
-    return [match_dict(item) for item in db.scalars(statement).all()]
+    return [match_dict(item, rank=index + 1) for index, item in enumerate(db.scalars(statement).all())]
 
 
 @router.post("/jobs/{job_id}/matches/run", status_code=status.HTTP_201_CREATED)
@@ -455,7 +477,7 @@ def rerun_matches(job_id: str, payload: ActorRequest, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     statement = select(Match).where(Match.id.in_([item.id for item in generated])).options(selectinload(Match.candidate), selectinload(Match.job).selectinload(Job.company)).order_by(Match.score.desc())
     hydrated = db.scalars(statement).all()
-    return {"generated": len(hydrated), "weights": WEIGHTS, "matches": [match_dict(item) for item in hydrated]}
+    return {"generated": len(hydrated), "weights": WEIGHTS, "shortlist": AI_SHORTLIST_SIZE, "matches": [match_dict(item, rank=index + 1) for index, item in enumerate(hydrated)]}
 
 
 @router.patch("/matches/{match_id}")
@@ -492,7 +514,7 @@ def actions(role: str | None = None, item_status: str | None = Query(default=Non
         statement = statement.where(ActionItem.owner_role == role)
     if item_status:
         statement = statement.where(ActionItem.status == item_status)
-    return [action_dict(item, db) for item in db.scalars(statement.order_by(ActionItem.status, ActionItem.due_date)).all()]
+    return [action_dict(item, db, role) for item in db.scalars(statement.order_by(ActionItem.status, ActionItem.due_date)).all()]
 
 
 @router.patch("/actions/{action_id}")

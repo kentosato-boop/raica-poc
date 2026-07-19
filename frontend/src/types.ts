@@ -13,6 +13,7 @@ export interface DashboardData {
     interviews: number;
     closed_won: number;
     new_jobs: number;
+    new_inflow: number;
   };
   pipeline: Record<string, number>;
   pipeline_scope: string;
@@ -20,8 +21,18 @@ export interface DashboardData {
   actions: ActionItem[];
   my_actions: ActionItem[];
   waiting_actions: ActionItem[];
+  new_inflow: NewInflowLead[];
   targets: { recommendations: number; interviews: number; closed_won: number; new_jobs: number };
   activity: AuditItem[];
+}
+
+export interface NewInflowLead {
+  id: string;
+  name: string;
+  specialization: string | null;
+  role_title: string;
+  ca_owner: string;
+  inflow_days: number;
 }
 
 export interface Candidate {
@@ -110,7 +121,8 @@ export interface MatchItem {
   company_name: string;
   score: number;
   scores: Record<string, number>;
-  similarity_pct: number;
+  ai_rank: number | null;
+  ai_recommended: boolean;
   ng_check: string;
   evidence_quote: string;
   recommendation_status: string;
@@ -155,7 +167,7 @@ export interface ActionItem {
   reason: string;
   status: "open" | "done" | "snoozed";
   source_ref: string | null;
-  target_type: "candidate" | null;
+  target_type: "candidate" | "job" | null;
   target_id: string | null;
 }
 
