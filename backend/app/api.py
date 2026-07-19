@@ -7,7 +7,7 @@ import base64
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import Text, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import Settings, get_settings
@@ -242,9 +242,33 @@ def candidates(
     if candidate_status:
         statement = statement.where(Candidate.status == candidate_status)
     if q:
-        token = f"%{q}%"
-        statement = statement.where(or_(Candidate.name.ilike(token), Candidate.role_title.ilike(token), Candidate.porters_id.ilike(token)))
-    return [candidate_dict(item) for item in db.scalars(statement.order_by(Candidate.last_contact_date.desc(), Candidate.name)).all()]
+        terms = [term for term in q.strip().split() if term]
+        statement = statement.where(and_(*[
+            or_(
+                Candidate.name.ilike(f"%{term}%"),
+                Candidate.role_title.ilike(f"%{term}%"),
+                Candidate.porters_id.ilike(f"%{term}%"),
+                Candidate.specialization.ilike(f"%{term}%"),
+                Candidate.notes.ilike(f"%{term}%"),
+                Candidate.skill_sheet_text.ilike(f"%{term}%"),
+                cast(Candidate.skills, Text).ilike(f"%{term}%"),
+            )
+            for term in terms
+        ]))
+    items = db.scalars(statement.order_by(Candidate.last_contact_date.desc(), Candidate.name)).all()
+    payload = [candidate_dict(item) for item in items]
+    if q:
+        query = q.casefold()
+        for result, item in zip(payload, items):
+            if query in (item.skill_sheet_text or "").casefold():
+                result["search_match"] = "スキルシート"
+            elif query in " ".join(item.skills or []).casefold():
+                result["search_match"] = "登録スキル"
+            elif query in (item.specialization or "").casefold():
+                result["search_match"] = "専門領域"
+            else:
+                result["search_match"] = "候補者情報"
+    return payload
 
 
 @router.get("/candidates/{candidate_id}")
@@ -312,9 +336,37 @@ def candidate_matches(candidate_id: str, db: Session = Depends(get_db)) -> list[
 def jobs(q: str | None = Query(default=None, max_length=100), db: Session = Depends(get_db)) -> list[dict]:
     statement = select(Job).options(selectinload(Job.company)).order_by(Job.received_date.desc())
     if q:
-        token = f"%{q}%"
-        statement = statement.join(Company).where(or_(Job.title.ilike(token), Job.location.ilike(token), Job.industry.ilike(token), Company.name.ilike(token)))
-    return [job_dict(item) for item in db.scalars(statement).all()]
+        terms = [term for term in q.strip().split() if term]
+        statement = statement.join(Company).where(and_(*[
+            or_(
+                Job.title.ilike(f"%{term}%"),
+                Job.location.ilike(f"%{term}%"),
+                Job.industry.ilike(f"%{term}%"),
+                Job.category.ilike(f"%{term}%"),
+                Job.specialization.ilike(f"%{term}%"),
+                cast(Job.required_skills, Text).ilike(f"%{term}%"),
+                Company.name.ilike(f"%{term}%"),
+                Company.industry.ilike(f"%{term}%"),
+                Company.hiring_signal.ilike(f"%{term}%"),
+                Company.dormant_job_title.ilike(f"%{term}%"),
+                Company.dormancy_reason.ilike(f"%{term}%"),
+                Company.notes.ilike(f"%{term}%"),
+            )
+            for term in terms
+        ]))
+    items = db.scalars(statement).all()
+    payload = [job_dict(item) for item in items]
+    if q:
+        query = q.casefold()
+        for result, item in zip(payload, items):
+            company_context = " ".join(filter(None, [item.company.name, item.company.industry, item.company.hiring_signal, item.company.dormant_job_title, item.company.dormancy_reason, item.company.notes])).casefold()
+            if query in company_context:
+                result["search_match"] = "企業採用情報"
+            elif query in " ".join(item.required_skills or []).casefold():
+                result["search_match"] = "案件スキル"
+            else:
+                result["search_match"] = "案件情報"
+    return payload
 
 
 def build_recommendation_draft(item: Match) -> dict:

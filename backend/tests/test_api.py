@@ -52,6 +52,9 @@ def test_candidate_search_and_job_matching():
     with TestClient(app) as client:
         candidates = client.get("/api/v1/candidates", params={"q": "CNC"}).json()
         assert [candidate["id"] for candidate in candidates] == ["cand-huy"]
+        python_candidates = client.get("/api/v1/candidates", params={"q": "Python"}).json()
+        assert [candidate["id"] for candidate in python_candidates] == ["cand-quan"]
+        assert python_candidates[0]["search_match"] == "登録スキル"
         result = client.post("/api/v1/jobs/job-c-cnc/matches/run", json={"actor": "pytest"})
         assert result.status_code == 201
         payload = result.json()
@@ -107,7 +110,8 @@ def test_integration_status_reports_missing_configuration():
 def test_job_search_and_skill_sheet_upload():
     with TestClient(app) as client:
         jobs = client.get("/api/v1/jobs", params={"q": "Backend"}).json()
-        assert [job["id"] for job in jobs] == ["job-f-backend"]
+        assert {job["id"] for job in jobs} == {"job-f-backend", "job-f-frontend"}
+        assert all(job["company_name"] == "F社" for job in jobs)
         response = client.post(
             "/api/v1/candidates/cand-quan/skill-sheet",
             files={"file": ("quan-skill.txt", b"Python backend engineer 5 years FastAPI", "text/plain")},
@@ -118,6 +122,12 @@ def test_job_search_and_skill_sheet_upload():
         assert payload["candidate"]["skill_sheet_filename"] == "quan-skill.txt"
         assert payload["candidate"]["current_salary_million"] == 25
         assert payload["candidate"]["work_style_options"] == ["remote", "hybrid"]
+        skill_sheet_results = client.get("/api/v1/candidates", params={"q": "FastAPI"}).json()
+        assert [candidate["id"] for candidate in skill_sheet_results] == ["cand-quan"]
+        assert skill_sheet_results[0]["search_match"] == "スキルシート"
+        factory_jobs = client.get("/api/v1/jobs", params={"q": "工場"}).json()
+        assert {job["company_name"] for job in factory_jobs} >= {"A社", "G社"}
+        assert all(job["search_match"] == "企業採用情報" for job in factory_jobs)
         download = client.get("/api/v1/candidates/cand-quan/skill-sheet")
         assert download.status_code == 200
         assert download.content == b"Python backend engineer 5 years FastAPI"

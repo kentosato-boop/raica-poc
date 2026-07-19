@@ -4,7 +4,7 @@ export type Locale = "ja" | "vi" | "en";
 
 const ja = {
   workspace: "メイン", dashboard: "マイデスク", candidates: "人材データベース", jobs: "案件データベース", matching: "推薦候補", revival: "休眠掘り起こし", myBall: "自分のボール", integrations: "連携・同期",
-  searchCandidates: "候補者名・スキル・職種を検索", searchJobs: "案件名・企業・勤務地を検索", dashboardRa: "RAダッシュボード", dashboardCa: "CAダッシュボード",
+  searchCandidates: "候補者・スキルシートを検索（例：Python）", searchJobs: "企業情報・案件を検索（例：工場）", dashboardRa: "RAダッシュボード", dashboardCa: "CAダッシュボード",
   recommendations: "推薦数", interviews: "面談設定数", wins: "成約数", newJobs: "新規案件", thisMonth: "今月", last7Days: "直近7日", openItems: "未完了",
   pipeline: "選考パイプライン", pipelineSub: "自分の担当範囲", activity: "最近の更新", details: "詳細", upload: "スキルシート取込", findMatches: "この候補者に合う案件を探す",
   internalParallel: "社内並行", externalParallel: "他社並行", specialty: "専門領域", specialtyYears: "専門経験", recentTenure: "直近勤続", remote: "勤務志向", skillSheet: "スキルシート", caMemo: "CAメモ",

@@ -10,7 +10,7 @@ export function Topbar({ role, onRole, search, onSearch, dark, onDark, onMenu, n
       <button className="icon-button desktop-nav-toggle" onClick={onNavVisible} title={navVisible ? "サイドバーを隠す" : "サイドバーを表示"}>{navVisible ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>
       <div className="search-control">
         <Search size={16} />
-        <input value={search} onChange={event => onSearch(event.target.value)} placeholder={role === "ra" ? t("searchCandidates") : t("searchJobs")} aria-label="検索" />
+        <input value={search} onChange={event => onSearch(event.target.value)} placeholder={role === "ra" ? t("searchCandidates") : t("searchJobs")} aria-label={role === "ra" ? "スキルシートから候補者を検索" : "企業情報から案件を検索"} />
         <kbd>⌘ K</kbd>
       </div>
       <div className="topbar-spacer" />

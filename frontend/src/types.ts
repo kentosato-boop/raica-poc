@@ -54,6 +54,7 @@ export interface Candidate {
   last_contact_date: string | null;
   avg_response_days: number | null;
   notes: string | null;
+  search_match?: string;
 }
 
 export interface Job {
@@ -79,6 +80,7 @@ export interface Job {
   max_commute_minutes: number | null;
   required_skills: string[];
   ai_candidate_count: number;
+  search_match?: string;
 }
 
 export interface MatchItem {

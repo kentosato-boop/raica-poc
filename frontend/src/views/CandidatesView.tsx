@@ -13,8 +13,8 @@ const statusLabels: Record<string, Record<string, string>> = {
 };
 const workLabels: Record<string, string> = { remote: "リモート", onsite: "常駐", hybrid: "ハイブリッド", flexible: "相談可" };
 
-export function CandidatesView({ role, candidates, selected, onSelect, status, onStatus, matches, onLoadMatches, onUpload, uploading }: {
-  role: "ra" | "ca"; candidates: Candidate[]; selected: Candidate | null; onSelect: (candidate: Candidate) => void;
+export function CandidatesView({ role, search, candidates, selected, onSelect, status, onStatus, matches, onLoadMatches, onUpload, uploading }: {
+  role: "ra" | "ca"; search: string; candidates: Candidate[]; selected: Candidate | null; onSelect: (candidate: Candidate) => void;
   status: string; onStatus: (status: string) => void; matches: MatchItem[]; onLoadMatches: () => void;
   onUpload: (file: File) => void; uploading: boolean;
 }) {
@@ -22,7 +22,7 @@ export function CandidatesView({ role, candidates, selected, onSelect, status, o
   const fileInput = useRef<HTMLInputElement>(null);
   return <div className="view-stack">
     <div className="page-heading compact-heading">
-      <div><span className="eyebrow">TALENT DATABASE</span><h1>{t("candidates")}</h1><p>候補者情報・並行状況・スキルシートを一覧で確認</p></div>
+      <div><span className="eyebrow">TALENT DATABASE</span><h1>{t("candidates")}</h1><p>{search ? `「${search}」を候補者情報・スキルシートから検索` : "候補者情報・並行状況・スキルシートを一覧で確認"}</p></div>
       <button className="button secondary" disabled={!selected || uploading} onClick={() => fileInput.current?.click()}><FileUp size={16} />{uploading ? "取込中" : "スキルシート登録"}</button>
       <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={event => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
     </div>
@@ -34,7 +34,7 @@ export function CandidatesView({ role, candidates, selected, onSelect, status, o
       {candidates.length ? <div className="table-scroll"><table className="data-table database-table"><thead><tr>
         <th>候補者</th><th>専門領域</th><th>業務経験</th><th>年齢</th><th>現年収</th><th>希望年収</th><th>勤務形態</th><th>社内並行</th><th>社外並行</th><th>スキルシート</th>
       </tr></thead><tbody>{candidates.map(candidate => <tr key={candidate.id} className={selected?.id === candidate.id ? "selected-row" : ""} onClick={() => onSelect(candidate)}>
-        <td><div className="person-cell"><div className="person-avatar">{candidate.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{candidate.name}</strong><small>{candidate.role_title} · {candidate.ca_owner}</small></div></div></td>
+        <td><div className="person-cell"><div className="person-avatar">{candidate.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{candidate.name}</strong><small>{candidate.role_title} · {candidate.ca_owner}</small>{candidate.search_match && <span className="search-match">{candidate.search_match}一致</span>}</div></div></td>
         <td><strong>{candidate.specialization || candidate.role_title}</strong></td><td>{candidate.specialization_years}年</td><td>{candidate.age ?? "—"}歳</td>
         <td>{candidate.current_salary_million ? `${candidate.current_salary_million}M` : "—"}</td><td>{candidate.desired_salary_million ? `${candidate.desired_salary_million}M` : "—"}</td>
         <td><div className="inline-tags">{(candidate.work_style_options?.length ? candidate.work_style_options : [candidate.work_style]).map(mode => <span key={mode}>{workLabels[mode] || mode}</span>)}</div></td>
