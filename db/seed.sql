@@ -51,3 +51,34 @@ INSERT OR IGNORE INTO action_queue (
 ('q-ra-long', 'ra', 'client_call', 'E社 / Do Van Long', '2026-07-19', 'call', '催促2回後も9営業日未返信。電話切替。', NULL),
 ('q-ca-hoa', 'ca', 'candidate_follow', 'Nguyen Thi Hoa', '2026-07-19', 'over', '平均反応1.5日超過。電話推奨。', 'cand-hoa'),
 ('q-ca-trang', 'ca', 'candidate_follow', 'Pham Thu Trang', '2026-07-19', 'call', '既読無反応2回。D社へ本日中に一次回答が必要。', 'cand-trang');
+
+UPDATE candidates SET age=27, gender='F', skills_json='["line_management","5s","kaizen"]' WHERE id='cand-hoa';
+UPDATE candidates SET age=33, gender='M', skills_json='["line_management","assembly"]' WHERE id='cand-son';
+UPDATE candidates SET age=31, gender='M', skills_json='["qc","iso9001","kaizen"]' WHERE id='cand-minh';
+UPDATE candidates SET age=24, gender='M', skills_json='["cnc","lathe","night_shift"]' WHERE id='cand-huy';
+UPDATE candidates SET age=29, gender='F', skills_json='["interpretation","administration"]' WHERE id='cand-trang';
+UPDATE candidates SET age=28, gender='F', skills_json='["line_management","assembly"]' WHERE id='cand-mai';
+UPDATE candidates SET age=26, gender='M', skills_json='["backend","python","nodejs"]' WHERE id='cand-quan';
+UPDATE candidates SET age=30, gender='F', skills_json='["assembly"]' WHERE id='cand-dormant-1';
+
+UPDATE jobs SET location='Bac Ninh', min_experience_years=4, min_jlpt='N3', max_commute_minutes=45,
+  required_skills_json='["line_management","5s"]' WHERE id='job-a-line';
+UPDATE jobs SET location='Bac Ninh', min_experience_years=2, min_jlpt='N4', max_commute_minutes=45,
+  required_skills_json='["line_management","assembly"]' WHERE id='job-a-phase2';
+UPDATE jobs SET location='Hung Yen', min_experience_years=3, min_jlpt='N4', max_commute_minutes=45,
+  required_skills_json='["qc","kaizen"]' WHERE id='job-b-qc';
+UPDATE jobs SET location='Ha Noi', min_experience_years=3, min_jlpt='N4', max_commute_minutes=40,
+  required_skills_json='["cnc","lathe"]' WHERE id='job-c-cnc';
+UPDATE jobs SET location='Ha Noi', min_experience_years=3, min_jlpt='N2', max_commute_minutes=60,
+  required_skills_json='["interpretation","administration"]' WHERE id='job-d-interpreter';
+UPDATE jobs SET location='Ha Noi / Remote', min_experience_years=4, min_jlpt='N3', max_commute_minutes=0,
+  required_skills_json='["backend","python"]' WHERE id='job-f-backend';
+
+INSERT OR IGNORE INTO applications (
+  id, candidate_id, job_id, stage, recommended_at, last_event_at, company_ok, candidate_ok
+) VALUES
+('app-hoa-a', 'cand-hoa', 'job-a-line', 'offer', '2026-07-08', '2026-07-14', 1, 0),
+('app-son-a2', 'cand-son', 'job-a-phase2', 'screening', '2026-07-10', '2026-07-10', 0, 1),
+('app-minh-b', 'cand-minh', 'job-b-qc', 'first_interview', '2026-07-10', '2026-07-15', 0, 1),
+('app-huy-c', 'cand-huy', 'job-c-cnc', 'screening', '2026-07-14', '2026-07-14', 0, 1),
+('app-trang-d', 'cand-trang', 'job-d-interpreter', 'intent_check', '2026-07-10', '2026-07-16', 1, 0);

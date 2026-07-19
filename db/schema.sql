@@ -14,7 +14,10 @@ CREATE TABLE IF NOT EXISTS candidates (
   work_style TEXT NOT NULL DEFAULT 'onsite',
   last_contact_date TEXT,
   avg_response_days REAL,
-  notes TEXT
+  notes TEXT,
+  age INTEGER,
+  gender TEXT CHECK (gender IN ('M', 'F') OR gender IS NULL),
+  skills_json TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS companies (
@@ -38,6 +41,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   salary_max_million REAL,
   received_date TEXT NOT NULL,
   ai_candidate_count INTEGER NOT NULL DEFAULT 0,
+  location TEXT,
+  min_experience_years REAL NOT NULL DEFAULT 0,
+  min_jlpt TEXT,
+  max_commute_minutes INTEGER,
+  required_skills_json TEXT NOT NULL DEFAULT '[]',
   FOREIGN KEY (company_id) REFERENCES companies(id)
 );
 
@@ -88,3 +96,38 @@ CREATE TABLE IF NOT EXISTS action_queue (
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done', 'snoozed')),
   source_ref TEXT
 );
+
+CREATE TABLE IF NOT EXISTS applications (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  job_id TEXT NOT NULL,
+  stage TEXT NOT NULL CHECK (stage IN (
+    'intent_check', 'recommended', 'screening', 'first_interview',
+    'final_interview', 'offer', 'closed_won', 'closed_lost'
+  )),
+  recommended_at TEXT,
+  last_event_at TEXT NOT NULL,
+  company_ok INTEGER NOT NULL DEFAULT 0 CHECK (company_ok IN (0, 1)),
+  candidate_ok INTEGER NOT NULL DEFAULT 0 CHECK (candidate_ok IN (0, 1)),
+  lost_reason TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(candidate_id, job_id),
+  FOREIGN KEY (candidate_id) REFERENCES candidates(id),
+  FOREIGN KEY (job_id) REFERENCES jobs(id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_matches_job_score ON matches(job_id, score DESC);
+CREATE INDEX IF NOT EXISTS idx_queue_role_status ON action_queue(owner_role, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_applications_stage ON applications(stage, last_event_at);

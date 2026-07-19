@@ -15,7 +15,8 @@
 
 | ファイル | 内容 |
 |---|---|
-| [`RAiCA.html`](./RAiCA.html) | デモ本体（単一HTML・ダウンロードしてブラウザで開くだけで動きます） |
+| [`RAiCA.html`](./RAiCA.html) | RA/CA業務画面 |
+| [`app.js`](./app.js) | DB/APIから画面データを取得し、再マッチング・推薦保存を行うフロント処理 |
 | [`server.py`](./server.py) | SQLite DBとAPIを持つPoCバックエンド（標準Pythonのみ） |
 | [`db/schema.sql`](./db/schema.sql) | 候補者・求人・企業・マッチング・接触ログ・アクションキューのDB定義 |
 | [`db/seed.sql`](./db/seed.sql) | 仕様書の正史に沿った初期データ |
@@ -37,11 +38,25 @@ python3 server.py
 |---|---|
 | `GET /api/health` | DB接続確認 |
 | `GET /api/stats` | 候補者数・求人数・マッチング件数・キュー件数 |
+| `GET /api/dashboard` | KPI・対応キュー・直近の操作履歴 |
 | `GET /api/candidates` | 候補者DB |
 | `GET /api/jobs` | 求人DB |
 | `GET /api/matches?job_id=job-a-phase2` | AI推薦候補と根拠 |
 | `GET /api/queue?role=ra` | RA/CA別の対応キュー |
-| `POST /api/import/candidates` | Porters候補者CSVの取り込み |
+| `GET /api/applications` | 候補者×求人の選考プロセス |
+| `POST /api/matching/run` | 求人条件に基づく5軸スコアの再計算 |
+| `PATCH /api/matches/:id` | 推薦・却下・選考中の状態保存 |
+| `PATCH /api/queue/:id` | 対応キューの完了・スヌーズ |
+| `POST /api/contacts` | 人間承認済みの連絡を記録し、キューを完了 |
+| `POST /api/import/candidates` | `data/` 内のPorters候補者CSVを取り込み |
+
+画面上の求人DB・候補者DB・推薦候補はAPIから取得します。推薦ボタンはDBに選考レコードを作成し、AI再マッチングはスキル35%・経験20%・日本語15%・給与15%・通勤15%で再計算した結果をSQLiteへ保存します。
+
+## 動作確認
+
+```bash
+python3 -m unittest tests/test_backend.py
+```
 
 ## デモの見方
 

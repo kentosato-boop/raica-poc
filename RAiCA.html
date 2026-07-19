@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<link rel="icon" href="data:,">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RAiCA | AIマッチングシステム</title>
@@ -568,6 +569,21 @@ th{font-size:11.5px;padding:11px 16px}
   .compare-grid,.integ-grid{grid-template-columns:1fr}
   .user-chip .who{display:none}
 }
+@media (max-width:600px){
+  .topbar{padding:8px 10px;gap:6px}
+  .topbar-right{gap:6px}
+  .topbar-right>.icon-btn,.topbar-right>.user-chip{display:none}
+  .search{flex:0 0 46px}
+  .search input{height:36px;padding:0;color:transparent}
+  .search input::placeholder{color:transparent}
+  .role-toggle{margin-right:0}
+  .role-toggle button{padding:5px 10px}
+  .lang-toggle button{font-size:0;padding:5px 9px}
+  .lang-toggle button::after{font-size:11px}
+  .lang-toggle button[data-lang="ja"]::after{content:"日"}
+  .lang-toggle button[data-lang="vi"]::after{content:"VI"}
+  .lang-toggle button[data-lang="en"]::after{content:"EN"}
+}
 .menu-btn{display:grid}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
@@ -600,7 +616,7 @@ th{font-size:11.5px;padding:11px 16px}
     <button class="nav-item" data-view="settings"><svg viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2.2"/><circle cx="8" cy="16" r="2.2"/></svg><span data-i18n="navInteg">連携・設定</span></button>
   </nav>
   <div class="sidebar-foot">
-    <span class="num">v1.0.0-poc</span>
+    <span class="num">v1.1.0-fullstack</span>
     <span class="sync-dot" id="syncStatus" data-i18n="portersSync">Porters同期済</span>
   </div>
 </aside>
@@ -741,8 +757,8 @@ th{font-size:11.5px;padding:11px 16px}
           <div class="card-head">
             <div class="card-title"><span id="matchJobTitle" data-i18n="ttlRecList">推薦候補</span><small data-i18n="subRecList">スコア順 · AI類似度スコアリング</small></div>
             <div class="spacer"></div>
-            <button class="chip-btn" onclick="toast('Porters CSVを再取込しました（142件更新）')" data-i18n="btnReimport">CSV再取込</button>
-            <button class="chip-btn primary" onclick="toast('AIマッチングを再実行中… 約40秒で完了します')" data-i18n="btnRerun">AI再マッチング</button>
+            <button class="chip-btn" id="csvImportBtn" data-i18n="btnReimport">CSV再取込</button>
+            <button class="chip-btn primary" id="matchingRunBtn" data-i18n="btnRerun">AI再マッチング</button>
           </div>
           <div style="overflow-x:auto">
           <table>
@@ -2662,5 +2678,6 @@ function renderAll(){renderMatch();renderJobs();renderCands();renderDorm();rende
 renderAll();
 hydrateFromApi();
 </script>
+<script src="/app.js"></script>
 </body>
 </html>
