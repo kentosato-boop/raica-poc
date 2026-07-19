@@ -1,4 +1,4 @@
-import type { ActionItem, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, SyncRun } from "./types";
+import type { ActionItem, AuditItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, RevivalData, SyncRun } from "./types";
 
 const API_KEY = import.meta.env.VITE_RAICA_API_KEY as string | undefined;
 
@@ -24,6 +24,7 @@ export const api = {
   uploadSkillSheet: (candidateId: string, file: File) => { const form = new FormData(); form.append("file", file); return request<{ candidate: Candidate; analysis: { skills: string[]; specialization: string | null; specialization_years: number } }>(`/api/v1/candidates/${candidateId}/skill-sheet`, { method: "POST", body: form }); },
   skillSheetUrl: (candidateId: string) => `/api/v1/candidates/${candidateId}/skill-sheet`,
   candidateMatches: (candidateId: string) => request<MatchItem[]>(`/api/v1/candidates/${candidateId}/matches`),
+  revival: (role: "ra" | "ca", owner: string) => request<RevivalData>(`/api/v1/revival?role=${encodeURIComponent(role)}&owner=${encodeURIComponent(owner)}`),
   jobs: (query = "") => request<Job[]>(`/api/v1/jobs?q=${encodeURIComponent(query)}`),
   matches: (jobId: string) => request<MatchItem[]>(`/api/v1/jobs/${jobId}/matches`),
   rerunMatches: (jobId: string, actor: string) => request<{ generated: number; matches: MatchItem[] }>(`/api/v1/jobs/${jobId}/matches/run`, { method: "POST", body: JSON.stringify({ actor }) }),

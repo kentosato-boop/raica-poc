@@ -18,20 +18,60 @@ def enrich_workflow_data(db: Session) -> None:
         "cand-mai": ("mai@example.invalid", 10.5, ["onsite"], "onsite", "line_management", 2, 2.4, 0, 0, []),
         "cand-quan": ("quan@example.invalid", 25, ["remote", "hybrid"], "remote", "backend", 5, 1.8, 1, 2, [{"scope": "internal", "label": "F社 Backend", "stage": "推薦準備"}, {"scope": "external", "label": "他社SaaS", "stage": "技術面接通過"}, {"scope": "external", "label": "他社Fintech", "stage": "一次面接"}]),
         "cand-lan": ("lan@example.invalid", 10, ["onsite"], "onsite", "assembly", 3, 0.8, 0, 0, []),
+        "cand-thao": ("thao@example.invalid", 13, ["onsite", "hybrid"], "hybrid", "accounting", 4, 2.7, 0, 0, []),
+        "cand-duc": ("duc@example.invalid", 20, ["remote", "hybrid"], "remote", "frontend", 4.5, 1.9, 0, 1, [{"scope": "external", "label": "他社Web開発", "stage": "カジュアル面談"}]),
     }
     keys = ("email", "current_salary_million", "work_style_options", "remote_preference", "specialization", "specialization_years", "recent_tenure_years", "internal_parallel_count", "external_parallel_count", "current_processes")
     candidate_profiles = {candidate_id: dict(zip(keys, values)) for candidate_id, values in candidate_profiles.items()}
+    dormant_candidates = [
+        Candidate(id="cand-thao", porters_id="PT-C-9002", name="Nguyen Thu Thao", status="dormant", ca_owner="CA Huong", role_title="Accountant", age=32, gender="F", years_experience=5, jlpt="N2", desired_salary_million=15, commute_minutes=40, work_style="hybrid", skills=["accounting", "japanese", "erp"], last_contact_date=date(2025, 8, 12), avg_response_days=2.2, notes="育児都合で転職活動を停止。ハイブリッド案件なら再開意向あり。"),
+        Candidate(id="cand-duc", porters_id="PT-C-9003", name="Tran Minh Duc", status="dormant", ca_owner="CA Huong", role_title="Frontend Engineer", age=27, gender="M", years_experience=5, jlpt="N3", desired_salary_million=24, commute_minutes=0, work_style="remote", skills=["frontend", "react", "typescript"], last_contact_date=date(2025, 12, 5), avg_response_days=1.4, notes="前回は常駐条件で辞退。リモート可なら再提案可能。"),
+    ]
+    for candidate in dormant_candidates:
+        if not db.get(Candidate, candidate.id):
+            db.add(candidate)
+    db.flush()
     for candidate_id, values in candidate_profiles.items():
         candidate = db.get(Candidate, candidate_id)
         if candidate:
             for key, value in values.items():
                 setattr(candidate, key, value)
 
-    company_owners = {"co-a": "RA 太郎", "co-b": "RA 太郎", "co-c": "RA 太郎", "co-d": "RA Linh", "co-e": "RA 太郎", "co-f": "RA Linh"}
+    revival_companies = [
+        Company(id="co-g", name="G社", industry="food", ra_owner="RA 太郎", avg_reply_days=3.0, hiring_signal="新ライン稼働の求人媒体掲載を検知", revival_status="hot", last_contact_date=date(2026, 2, 18), last_job_date=date(2025, 10, 2), dormant_job_title="食品加工ラインリーダー", dormancy_reason="工場増設延期により採用停止", notes="前回2名成約。夜勤可能者の反応が良い。"),
+        Company(id="co-h", name="H社", industry="logistics", ra_owner="RA 太郎", avg_reply_days=4.5, hiring_signal="採用ページを3か月ぶりに更新", revival_status="watching", last_contact_date=date(2026, 1, 9), last_job_date=date(2025, 7, 20), dormant_job_title="倉庫管理スーパーバイザー", dormancy_reason="採用予算凍結", notes="日本語N3以上、倉庫管理3年以上を重視。"),
+    ]
+    for company in revival_companies:
+        if not db.get(Company, company.id):
+            db.add(company)
+    db.flush()
+    company_owners = {"co-a": "RA 太郎", "co-b": "RA 太郎", "co-c": "RA 太郎", "co-d": "RA Linh", "co-e": "RA 太郎", "co-f": "RA Linh", "co-g": "RA 太郎", "co-h": "RA 太郎"}
     for company_id, owner in company_owners.items():
         company = db.get(Company, company_id)
         if company:
             company.ra_owner = owner
+
+    company_revival_profiles = {
+        "co-e": ("hot", date(2026, 3, 4), date(2025, 9, 15), "倉庫ラインリーダー", "拠点統合により採用保留"),
+        "co-g": ("hot", date(2026, 2, 18), date(2025, 10, 2), "食品加工ラインリーダー", "工場増設延期により採用停止"),
+        "co-h": ("watching", date(2026, 1, 9), date(2025, 7, 20), "倉庫管理スーパーバイザー", "採用予算凍結"),
+    }
+    for company_id, values in company_revival_profiles.items():
+        company = db.get(Company, company_id)
+        if company:
+            company.revival_status, company.last_contact_date, company.last_job_date, company.dormant_job_title, company.dormancy_reason = values
+
+    revival_jobs = [
+        Job(id="job-d-accountant", porters_id="PT-J-0007", company_id="co-d", title="日系会計スタッフ", category="jp", industry="trade", status="open", location="Ha Noi / Hybrid", salary_min_million=14, salary_max_million=18, received_date=date(2026, 7, 18), min_experience_years=3, preferred_age_min=25, preferred_age_max=38, remote_mode="hybrid", specialization="accounting", min_specialization_years=3, min_jlpt="N2", max_commute_minutes=50, required_skills=["accounting", "japanese"]),
+        Job(id="job-f-frontend", porters_id="PT-J-0008", company_id="co-f", title="Frontend Engineer", category="eng", industry="it", status="urgent", location="Ha Noi / Remote", salary_min_million=22, salary_max_million=30, received_date=date(2026, 7, 18), min_experience_years=4, preferred_age_min=24, preferred_age_max=38, remote_mode="remote", specialization="frontend", min_specialization_years=4, min_jlpt="N3", max_commute_minutes=0, required_skills=["frontend", "react", "typescript"]),
+        Job(id="job-e-dormant", porters_id="PT-J-0901", company_id="co-e", title="倉庫ラインリーダー", category="worker", industry="log", status="closed", location="Bac Ninh", salary_min_million=12, salary_max_million=15, received_date=date(2025, 9, 15), min_experience_years=3, remote_mode="onsite", specialization="line_management", min_specialization_years=3, min_jlpt="N4", max_commute_minutes=45, required_skills=["line_management", "warehouse"]),
+        Job(id="job-g-dormant", porters_id="PT-J-0902", company_id="co-g", title="食品加工ラインリーダー", category="worker", industry="food", status="closed", location="Hung Yen", salary_min_million=12, salary_max_million=16, received_date=date(2025, 10, 2), min_experience_years=3, remote_mode="onsite", specialization="line_management", min_specialization_years=3, min_jlpt="N4", max_commute_minutes=50, required_skills=["line_management", "food_processing"]),
+        Job(id="job-h-dormant", porters_id="PT-J-0903", company_id="co-h", title="倉庫管理スーパーバイザー", category="worker", industry="logistics", status="closed", location="Ha Noi", salary_min_million=14, salary_max_million=18, received_date=date(2025, 7, 20), min_experience_years=3, remote_mode="onsite", specialization="warehouse", min_specialization_years=3, min_jlpt="N3", max_commute_minutes=45, required_skills=["warehouse", "team_management"]),
+    ]
+    for job in revival_jobs:
+        if not db.get(Job, job.id):
+            db.add(job)
+    db.flush()
 
     job_profiles = {
         "job-a-line": (24, 35, "onsite", "line_management", 4),

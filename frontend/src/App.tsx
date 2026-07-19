@@ -5,7 +5,7 @@ import { RecommendationComposer } from "./components/RecommendationComposer";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { createTranslator, I18nProvider, type Locale } from "./i18n";
-import type { ActionItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, SyncRun, ViewKey } from "./types";
+import type { ActionItem, Candidate, DashboardData, Integration, Job, MatchItem, OutboxEvent, RecommendationDraft, RevivalData, RevivalItem, SyncRun, ViewKey } from "./types";
 import { DashboardView } from "./views/DashboardView";
 
 const ActionsView = lazy(() => import("./views/ActionsView").then(module => ({ default: module.ActionsView })));
@@ -36,6 +36,7 @@ export default function App() {
   const [selectedJobId, setSelectedJobId] = useState("");
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [candidateMatches, setCandidateMatches] = useState<MatchItem[]>([]);
+  const [revival, setRevival] = useState<RevivalData | null>(null);
   const [matchingBusy, setMatchingBusy] = useState(false);
   const [draft, setDraft] = useState<RecommendationDraft | null>(null);
   const [sending, setSending] = useState(false);
@@ -76,14 +77,15 @@ export default function App() {
   useEffect(() => { setSearch(""); loadDashboard(); }, [role, loadDashboard]);
 
   useEffect(() => {
-    if (view !== "candidates" && view !== "revival") return;
+    if (view !== "candidates") return;
     const timer = window.setTimeout(() => {
-      const status = view === "revival" ? "dormant" : candidateStatus;
-      const query = view === "candidates" && role === "ra" ? search : "";
+      const status = candidateStatus;
+      const query = role === "ra" ? search : "";
       api.candidates(query, status).then(result => { setCandidates(result); setSelectedCandidate(current => result.find(item => item.id === current?.id) ?? result[0] ?? null); }).catch(error => notify(error.message, "error"));
     }, 180);
     return () => window.clearTimeout(timer);
   }, [view, role, search, candidateStatus, notify]);
+  useEffect(() => { if (view === "revival") api.revival(role, actor).then(setRevival).catch(error => notify(error.message, "error")); }, [view, role, actor, notify]);
   useEffect(() => { if (view === "jobs") { const timer = window.setTimeout(() => loadJobs(role === "ca" ? search : ""), 180); return () => window.clearTimeout(timer); } }, [view, role, search, loadJobs]);
   useEffect(() => { if (selectedJobId && (view === "matching" || view === "jobs")) api.matches(selectedJobId).then(setMatches).catch(error => notify(error.message, "error")); }, [view, selectedJobId, notify]);
   useEffect(() => { if (view === "actions") api.actions(role, actionStatus).then(setActions).catch(error => notify(error.message, "error")); }, [view, role, actionStatus, notify]);
@@ -104,6 +106,13 @@ export default function App() {
   const loadCandidateMatches = async () => {
     if (!selectedCandidate) return;
     try { setCandidateMatches(await api.candidateMatches(selectedCandidate.id)); }
+    catch (error) { notify((error as Error).message, "error"); }
+  };
+  const openRevivalTarget = async (item: RevivalItem) => {
+    if (item.kind === "company") {
+      setSearch(item.name); await loadJobs(item.name); setView("jobs"); return;
+    }
+    try { const candidate = await api.candidate(item.target_id); setSelectedCandidate(candidate); setCandidates([candidate]); setView("candidates"); }
     catch (error) { notify((error as Error).message, "error"); }
   };
   const rerunMatching = async () => {
@@ -137,7 +146,7 @@ export default function App() {
 
   return <I18nProvider value={{ locale, t }}>
     <div className={`app-shell ${navVisible ? "" : "nav-hidden"}`}>
-      {navVisible && <Sidebar view={view} onChange={setView} open={sidebarOpen} onClose={() => setSidebarOpen(false)} openActions={dashboard?.counts.open_actions ?? 0} />}
+      {navVisible && <Sidebar role={role} view={view} onChange={setView} open={sidebarOpen} onClose={() => setSidebarOpen(false)} openActions={dashboard?.counts.open_actions ?? 0} />}
       <div className="app-main">
         <Topbar role={role} onRole={setRole} search={search} onSearch={handleSearch} dark={dark} onDark={() => setDark(value => !value)} onMenu={() => { setNavVisible(true); setSidebarOpen(true); }} navVisible={navVisible} onNavVisible={() => setNavVisible(value => !value)} apiOnline={apiOnline} locale={locale} onLocale={setLocale} />
         <main className="main-content"><Suspense fallback={<div className="view-loading" aria-label="読み込み中"><i /><span>Loading</span></div>}>
@@ -145,7 +154,7 @@ export default function App() {
           {view === "candidates" && <CandidatesView role={role} candidates={candidates} selected={selectedCandidate} onSelect={candidate => { setSelectedCandidate(candidate); setCandidateMatches([]); }} status={candidateStatus} onStatus={setCandidateStatus} matches={candidateMatches} onLoadMatches={loadCandidateMatches} onUpload={uploadSkillSheet} uploading={uploading} />}
           {view === "jobs" && <JobsView role={role} jobs={jobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
           {view === "matching" && <MatchingView jobs={jobs} selectedJobId={selectedJobId} onJob={setSelectedJobId} matches={matches} loading={matchingBusy} onRerun={rerunMatching} onDecision={decideMatch} />}
-          {view === "revival" && <RevivalView candidates={candidates} onSelect={candidate => { setSelectedCandidate(candidate); setView("candidates"); }} />}
+          {view === "revival" && <RevivalView role={role} data={revival} onOpen={openRevivalTarget} />}
           {view === "actions" && <ActionsView actions={actions} role={role} onRole={setRole} status={actionStatus} onStatus={setActionStatus} onUpdate={updateAction} />}
           {view === "integrations" && <IntegrationsView integrations={integrations} syncRuns={syncRuns} outbox={outbox} busy={integrationBusy} onTest={testIntegration} onSync={syncPorters} onRetry={retryOutbox} />}
         </Suspense></main>

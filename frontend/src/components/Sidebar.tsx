@@ -12,7 +12,7 @@ const items: Array<{ key: ViewKey; label: CopyKey; icon: LucideIcon }> = [
   { key: "integrations", label: "integrations", icon: PlugZap },
 ];
 
-export function Sidebar({ view, onChange, open, onClose, openActions }: { view: ViewKey; onChange: (view: ViewKey) => void; open: boolean; onClose: () => void; openActions: number }) {
+export function Sidebar({ role, view, onChange, open, onClose, openActions }: { role: "ra" | "ca"; view: ViewKey; onChange: (view: ViewKey) => void; open: boolean; onClose: () => void; openActions: number }) {
   const { t } = useI18n();
   return (
     <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
@@ -26,7 +26,7 @@ export function Sidebar({ view, onChange, open, onClose, openActions }: { view: 
         {items.map(({ key, label, icon: Icon }) => (
           <button key={key} className={view === key ? "active" : ""} onClick={() => { onChange(key); onClose(); }}>
             <Icon size={17} strokeWidth={1.9} />
-            <span>{t(label)}</span>
+            <span>{key === "revival" ? (role === "ra" ? "求人掘り起こし" : "候補者掘り起こし") : t(label)}</span>
             {key === "actions" && openActions > 0 && <span className="nav-count">{openActions}</span>}
           </button>
         ))}

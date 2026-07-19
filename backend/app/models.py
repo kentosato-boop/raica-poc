@@ -65,6 +65,11 @@ class Company(TimestampMixin, Base):
     ra_owner: Mapped[str] = mapped_column(String(100), default="RA 太郎", index=True)
     avg_reply_days: Mapped[Optional[float]] = mapped_column(Float)
     hiring_signal: Mapped[Optional[str]] = mapped_column(String(200))
+    revival_status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    last_contact_date: Mapped[Optional[date]] = mapped_column(Date)
+    last_job_date: Mapped[Optional[date]] = mapped_column(Date)
+    dormant_job_title: Mapped[Optional[str]] = mapped_column(String(180))
+    dormancy_reason: Mapped[Optional[str]] = mapped_column(Text)
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     jobs: Mapped[list[Job]] = relationship(back_populates="company", cascade="all, delete-orphan")

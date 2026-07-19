@@ -19,8 +19,8 @@ def test_health_and_dashboard():
     with TestClient(app) as client:
         assert client.get("/health").json()["ok"] is True
         dashboard = client.get("/api/v1/dashboard").json()
-        assert dashboard["counts"]["candidates"] == 8
-        assert dashboard["counts"]["open_jobs"] == 6
+        assert dashboard["counts"]["candidates"] == 10
+        assert dashboard["counts"]["open_jobs"] == 8
         assert dashboard["counts"]["open_actions"] == 11
         assert dashboard["counts"]["recommendations"] >= 1
         assert dashboard["counts"]["closed_won"] == 1
@@ -28,6 +28,24 @@ def test_health_and_dashboard():
         assert dashboard["targets"]["recommendations"] == 20
         assert dashboard["my_actions"]
         assert dashboard["waiting_actions"]
+
+
+def test_role_specific_revival_data():
+    with TestClient(app) as client:
+        ra = client.get("/api/v1/revival", params={"role": "ra", "owner": "RA 太郎"}).json()
+        ca = client.get("/api/v1/revival", params={"role": "ca", "owner": "CA Huong"}).json()
+        assert ra["mode"] == "company_job_revival"
+        assert all(item["kind"] == "company" for item in ra["items"])
+        assert {item["id"] for item in ra["items"]} >= {"co-e", "co-g", "co-h"}
+        assert ca["mode"] == "candidate_job_revival"
+        assert all(item["kind"] == "candidate" for item in ca["items"])
+        assert {item["id"] for item in ca["items"]} == {"cand-thao", "cand-duc"}
+        assert all(item["job_title"] for item in ca["items"])
+        assert {item["job_id"] for item in ca["items"]} == {"job-d-accountant", "job-f-frontend"}
+        assert all(item["priority_score"] >= 80 for item in ca["items"])
+        historical_jobs = client.get("/api/v1/jobs", params={"q": "G社"}).json()
+        assert [job["id"] for job in historical_jobs] == ["job-g-dormant"]
+        assert historical_jobs[0]["status"] == "closed"
 
 
 def test_candidate_search_and_job_matching():

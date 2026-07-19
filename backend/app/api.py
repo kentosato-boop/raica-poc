@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 from .config import Settings, get_settings
 from .database import get_db
 from .integrations import dispatch_event, enqueue_event, integration_snapshot, sync_porters, test_integration
-from .matching import WEIGHTS, run_matching
+from .matching import WEIGHTS, run_matching, score_candidate
 from .models import ActionItem, Application, AuditLog, Candidate, Company, ContactLog, IntegrationConnection, Job, Match, OutboxEvent, SyncRun
 from .schemas import ActionUpdate, ActorRequest, ContactCreate, MatchDecision, OutboxRetry
 from .skill_sheets import analyze_skill_sheet, extract_text
@@ -182,6 +182,54 @@ def dashboard(role: str = "ra", owner: str | None = None, db: Session = Depends(
         "companies": company_names,
         "activity": [{"id": item.id, "actor": item.actor, "action": item.action, "entity_type": item.entity_type, "entity_id": item.entity_id, "details": item.details, "created_at": item.created_at} for item in activity],
     }
+
+
+@router.get("/revival")
+def revival(role: str = "ra", owner: str | None = None, db: Session = Depends(get_db)) -> dict:
+    today = date.today()
+    if role == "ra":
+        owner = owner or "RA 太郎"
+        companies = db.scalars(
+            select(Company)
+            .where(Company.ra_owner == owner, Company.revival_status.in_(["hot", "watching"]))
+            .order_by(Company.revival_status, Company.last_contact_date)
+        ).all()
+        items = []
+        for company in companies:
+            dormant_days = (today - company.last_contact_date).days if company.last_contact_date else 0
+            score = min(98, 62 + dormant_days // 18 + (12 if company.revival_status == "hot" else 0))
+            items.append({
+                "id": company.id, "kind": "company", "name": company.name, "owner": company.ra_owner,
+                "primary_label": company.dormant_job_title or "過去求人", "secondary_label": company.industry,
+                "last_contact_date": company.last_contact_date, "dormant_days": dormant_days,
+                "priority_score": score, "status": company.revival_status,
+                "signal": company.hiring_signal, "reason": company.dormancy_reason or company.notes,
+                "recommendation": f"{company.dormant_job_title or '過去求人'}の採用再開状況を確認し、前回要件を更新する",
+                "channel": "Gmail / 電話", "target_id": company.id,
+            })
+        return {"role": "ra", "mode": "company_job_revival", "items": items}
+
+    owner = owner or "CA Huong"
+    candidates = db.scalars(select(Candidate).where(Candidate.status == "dormant", Candidate.ca_owner == owner).order_by(Candidate.last_contact_date)).all()
+    jobs = db.scalars(select(Job).where(Job.status != "closed").options(selectinload(Job.company))).all()
+    items = []
+    for candidate in candidates:
+        scored_jobs = [(job, score_candidate(candidate, job)) for job in jobs]
+        best_job, best_score = max(scored_jobs, key=lambda pair: int(pair[1]["score"])) if scored_jobs else (None, None)
+        dormant_days = (today - candidate.last_contact_date).days if candidate.last_contact_date else 0
+        items.append({
+            "id": candidate.id, "kind": "candidate", "name": candidate.name, "owner": candidate.ca_owner,
+            "primary_label": candidate.role_title, "secondary_label": candidate.specialization or candidate.role_title,
+            "last_contact_date": candidate.last_contact_date, "dormant_days": dormant_days,
+            "priority_score": int(best_score["score"]) if best_score else 0, "status": candidate.status,
+            "signal": f"{best_job.company.name} / {best_job.title}" if best_job else "現在の案件を再検索",
+            "reason": candidate.notes,
+            "recommendation": str(best_score["evidence_quote"]) if best_score else "希望条件を更新して案件を再検索する",
+            "channel": "Zalo / Gmail", "target_id": candidate.id,
+            "job_id": best_job.id if best_job else None, "job_title": best_job.title if best_job else None,
+            "company_name": best_job.company.name if best_job else None,
+        })
+    return {"role": "ca", "mode": "candidate_job_revival", "items": items}
 
 
 @router.get("/candidates")
