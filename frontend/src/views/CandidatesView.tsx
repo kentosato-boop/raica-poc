@@ -1,5 +1,5 @@
-import { BriefcaseBusiness, ExternalLink, FileText, FileUp, MapPin, Sparkles } from "lucide-react";
-import { useRef } from "react";
+import { BriefcaseBusiness, ExternalLink, FileText, FileUp, MapPin, SlidersHorizontal, Sparkles } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Badge, statusTone } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { useI18n } from "../i18n";
@@ -26,20 +26,35 @@ export function CandidatesView({ role, search, candidates, selected, onSelect, s
 }) {
   const { t, locale } = useI18n();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [specialization, setSpecialization] = useState("");
+  const [workStyle, setWorkStyle] = useState("");
+  const [parallel, setParallel] = useState("");
+  const specializationOptions = useMemo(() => Array.from(new Set(candidates.map(candidate => candidate.specialization).filter(Boolean))).sort() as string[], [candidates]);
+  const filteredCandidates = useMemo(() => candidates.filter(candidate => {
+    const hasSpecialization = !specialization || candidate.specialization === specialization;
+    const hasWorkStyle = !workStyle || candidate.work_style_options.includes(workStyle) || candidate.work_style === workStyle;
+    const hasParallel = parallel === "internal" ? candidate.internal_parallel_count > 0 : parallel === "external" ? candidate.external_parallel_count > 0 : parallel === "clear" ? candidate.internal_parallel_count + candidate.external_parallel_count === 0 : true;
+    return hasSpecialization && hasWorkStyle && hasParallel;
+  }), [candidates, parallel, specialization, workStyle]);
   return <div className="view-stack">
     <div className="page-heading compact-heading">
       <div><span className="eyebrow">TALENT DATABASE</span><h1>{t("candidates")}</h1><p>{search ? `「${search}」を候補者情報・スキルシートから検索` : "候補者情報・並行状況・スキルシートを一覧で確認"}</p></div>
       <button className="button secondary" disabled={!selected || uploading} onClick={() => fileInput.current?.click()}><FileUp size={16} />{uploading ? "取込中" : "スキルシート登録"}</button>
       <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.md,.csv" hidden onChange={event => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
     </div>
-    <div className="filter-toolbar">
+    <div className="filter-toolbar database-toolbar">
       <div className="segmented compact">{["", "active", "process", "dormant"].map(value => <button key={value || "all"} className={status === value ? "selected" : ""} onClick={() => onStatus(value)}>{value ? statusLabels[locale][value] : t("all")}</button>)}</div>
-      <span>{candidates.length}名</span>
+      <div className="advanced-filters" aria-label="候補者フィルター">
+        <label><span><SlidersHorizontal size={13} />専門</span><select value={specialization} onChange={event => setSpecialization(event.target.value)}><option value="">すべて</option>{specializationOptions.map(value => <option key={value} value={value}>{specializationLabels[value] || value}</option>)}</select></label>
+        <label><span>勤務</span><select value={workStyle} onChange={event => setWorkStyle(event.target.value)}><option value="">すべて</option>{Object.entries(workLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>並行</span><select value={parallel} onChange={event => setParallel(event.target.value)}><option value="">すべて</option><option value="internal">社内あり</option><option value="external">社外あり</option><option value="clear">並行なし</option></select></label>
+      </div>
+      <span>{filteredCandidates.length} / {candidates.length}名</span>
     </div>
     <section className="surface table-surface database-surface">
-      {candidates.length ? <div className="table-scroll"><table className="data-table database-table"><thead><tr>
+      {filteredCandidates.length ? <div className="table-scroll"><table className="data-table database-table"><thead><tr>
         <th>候補者</th><th>活動状態</th><th>職種・専門領域</th><th>業務経験</th><th>希望条件</th><th>並行状況</th><th>稼働・勤務地</th><th>スキルシート</th>
-      </tr></thead><tbody>{candidates.map(candidate => <tr key={candidate.id} className={selected?.id === candidate.id ? "selected-row" : ""} onClick={() => onSelect(candidate)}>
+      </tr></thead><tbody>{filteredCandidates.map(candidate => <tr key={candidate.id} className={selected?.id === candidate.id ? "selected-row" : ""} onClick={() => onSelect(candidate)}>
         <td><div className="person-cell"><div className="person-avatar">{candidate.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</div><div><strong>{candidate.name}</strong><small>{candidate.role_title} · {candidate.ca_owner}</small>{candidate.search_match && <span className="search-match">{candidate.search_match}一致</span>}</div></div></td>
         <td><Badge tone={statusTone(candidate.status)}>{statusLabels[locale][candidate.status] || candidate.status}</Badge></td>
         <td><strong>{specialty(candidate)}</strong><small className="cell-subline">{candidate.specialization_years}年</small></td>
