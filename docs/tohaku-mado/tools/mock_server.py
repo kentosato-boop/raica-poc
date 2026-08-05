@@ -189,6 +189,8 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self._json({"success": True, "checkinId": "CK-001", "checkinNumber": 1, "bookingId": "TEST-2500200", "reservationId": "RSV-001"})
         if p == '/api/order' and method == 'POST':
             return self._json({"success": True, "orderNumber": 6, "orderId": "O-006", "total": 1200})
+        if p == '/api/pre-consent' and method == 'POST':
+            return self._json({"success": True, "preConsentId": "PC-001"})
         if p == '/api/register' and method == 'POST':
             return self._json({"success": True, "autoCheckin": True, "memberId": "M-001"})
         if p == '/api/menu':
