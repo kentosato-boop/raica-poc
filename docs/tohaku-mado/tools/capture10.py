@@ -103,7 +103,7 @@ def main():
         shot(p, "j-day-1-top")
         el(p, "#topDeceasedInfo", "l-sec-deceased2")
         el(p, "#topBtn", "l-btn-day-next2")
-        p.click("text=同意にすすむ")
+        p.click("#topBtn")
         p.wait_for_timeout(1500)
         shot(p, "j-day-2-consent", full=True)
         p.check("#checkAll")

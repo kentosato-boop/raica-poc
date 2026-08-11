@@ -197,6 +197,33 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self._json({"menu": {"お飲み物": MENU_ITEMS[:4], "お食事": MENU_ITEMS[4:6]}, "salesPointName": "控室"})
         if p == '/api/admin/me':
             return self._json({"success": True, "user": USERS[0]})
+        if p == '/api/admin/checkins':
+            return self._json({"success": True, "checkins": []})
+        if p == '/api/admin/sap/base-url':
+            return self._json({"success": True, "baseUrl": "https://saptest-staging.example.jp"})
+        if p == '/api/admin/sap/products/storage-location-filter':
+            return self._json({"success": True, "materialCodes": []})
+        if p == '/api/admin/inventory/fetch' and method == 'POST':
+            return self._json({"success": True, "items": [], "total": 0, "hasMore": False})
+        if p == '/api/admin/reservation-consent-tokens' and method == 'POST':
+            return self._json({"success": True, "tokens": {}})
+        if p == '/api/pre-consent-fields.js':
+            body = ("window.PreConsentFields={"
+                    "normalizeKana:function(v){return String(v||'').normalize('NFKC')"
+                    ".replace(/[\\u30a1-\\u30f6]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60)})"
+                    ".replace(/[\\s\\u3000]+/g,' ').trim()},"
+                    "validatePreConsentForm:function(raw,opt){var v={};for(var k in raw){v[k]=typeof raw[k]==='string'?raw[k].trim():raw[k];}"
+                    "['deceasedLastNameKana','deceasedFirstNameKana','applicantLastNameKana','applicantFirstNameKana']"
+                    ".forEach(function(k){if(v[k])v[k]=window.PreConsentFields.normalizeKana(v[k]);});"
+                    "return {ok:true,errors:[],values:v};}"
+                    "};").encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if p == '/api/admin/halls':
             return self._json({"success": True, "halls": HALLS})
         if p == '/api/menu':
