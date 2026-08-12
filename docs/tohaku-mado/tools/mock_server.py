@@ -35,7 +35,7 @@ MENU_ITEMS = [
 ]
 
 RESERVATIONS = [
-    {"id": "RSV-001", "bookingId": "TEST-2500200", "deceasedName": "東博　太郎", "deceasedKana": "とうはく　たろう", "funeralCompany": "幕内祭典", "applicantName": "東博　一郎", "applicantKana": "とうはく　いちろう", "applicantPhone": "070-4309-6523", "date": TODAY, "cremationTime": "10:00", "hallId": "HALL-18YT", "hallName": "四ツ木斎場", "confirmed": True, "discounts": {}, "reservedItems": [{"name": "火葬料金（最上等）", "productGroup": "10", "quantity": 1, "price": 59000}], "preConsentLinked": True, "consentCremation": True},
+    {"id": "RSV-001", "funeralCompanyCustomerId": "900000", "bookingId": "TEST-2500200", "deceasedName": "東博　太郎", "deceasedKana": "とうはく　たろう", "funeralCompany": "幕内祭典", "applicantName": "東博　一郎", "applicantKana": "とうはく　いちろう", "applicantPhone": "070-4309-6523", "date": TODAY, "cremationTime": "10:00", "hallId": "HALL-18YT", "hallName": "四ツ木斎場", "confirmed": True, "discounts": {}, "reservedItems": [{"name": "火葬料金（最上等）", "productGroup": "10", "quantity": 1, "price": 59000}], "preConsentLinked": True, "consentCremation": True},
     {"id": "RSV-002", "bookingId": "TEST-2500201", "deceasedName": "窓口　花子", "deceasedKana": "まどぐち　はなこ", "funeralCompany": "あすなろ祭典", "applicantName": "窓口　健二", "applicantKana": "まどぐち　けんじ", "applicantPhone": "080-1234-5678", "date": TODAY, "cremationTime": "10:00", "hallId": "HALL-18YT", "hallName": "四ツ木斎場", "confirmed": True, "discounts": {}, "reservedItems": [], "preConsentLinked": False, "consentCremation": False},
     {"id": "RSV-003", "bookingId": "TEST-2500202", "deceasedName": "広済　次郎", "deceasedKana": "こうさい　じろう", "funeralCompany": "セレモニー光", "applicantName": "広済　三郎", "applicantKana": "こうさい　さぶろう", "applicantPhone": "090-8765-4321", "date": TODAY, "cremationTime": "11:00", "hallId": "HALL-18YT", "hallName": "四ツ木斎場", "confirmed": False, "discounts": {"kuminso": True}, "reservedItems": [{"name": "式場使用料", "productGroup": "20", "quantity": 1, "price": 100000}], "preConsentLinked": False, "consentCremation": False},
     {"id": "RSV-004", "bookingId": "TEST-2500203", "deceasedName": "四ツ木　勇", "deceasedKana": "よつぎ　いさむ", "funeralCompany": "幕内祭典", "applicantName": "四ツ木　守", "applicantKana": "よつぎ　まもる", "applicantPhone": "070-1111-2222", "date": TODAY, "cremationTime": "13:00", "hallId": "HALL-18YT", "hallName": "四ツ木斎場", "confirmed": True, "discounts": {}, "reservedItems": [], "preConsentLinked": True, "consentCremation": True},
@@ -197,6 +197,15 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self._json({"menu": {"お飲み物": MENU_ITEMS[:4], "お食事": MENU_ITEMS[4:6]}, "salesPointName": "控室"})
         if p == '/api/admin/me':
             return self._json({"success": True, "user": USERS[0]})
+        if p == '/api/admin/sap/products/urns':
+            return self._json({"success": True, "items": [
+                {"code": "28307", "name": "骨壺（白磁 7寸）", "price": 1160, "size": "7寸"},
+                {"code": "28308", "name": "骨壺（白磁 6寸）", "price": 1050, "size": "6寸"},
+                {"code": "28315", "name": "骨壺（青磁 7寸）", "price": 1600, "size": "7寸"}]})
+        if p.startswith('/api/admin/checkin/') and p.endswith('/receipt-splits'):
+            return self._json({"success": True, "splits": [], "items": [
+                {"materialCode": "3579", "name": "ブレンドコーヒー", "quantity": 2, "orderSource": "line", "receiptGroup": 1},
+                {"materialCode": "3709", "name": "精進料理膳", "quantity": 1, "orderSource": "proxy", "receiptGroup": 1}]})
         if p == '/api/admin/checkins':
             return self._json({"success": True, "checkins": []})
         if p == '/api/admin/sap/base-url':
