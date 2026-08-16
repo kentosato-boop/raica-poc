@@ -91,8 +91,9 @@ blockquote{ margin:14px 0; padding:10px 16px; background:var(--warn-bg); border-
 blockquote p{ margin:4px 0; }
 .tblwrap{ overflow-x:auto; margin:14px 0; }
 table{ border-collapse:collapse; width:100%; font-size:14px; font-variant-numeric:tabular-nums; }
-th{ background:var(--accent-soft); color:var(--ink); text-align:left; font-weight:700; }
+th{ background:var(--accent-soft); color:var(--ink); text-align:left; font-weight:700; white-space:nowrap; }
 th,td{ border:1px solid var(--line); padding:7px 11px; vertical-align:top; }
+th, td:first-child{ word-break:keep-all; }
 tbody tr:nth-child(even){ background:color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 figure.shot{ margin:20px 0; }
 figure.shot img{ max-width:100%; height:auto; display:block; border:1px solid var(--line);
