@@ -112,7 +112,21 @@ def summary_payload(cid):
                        {"lineNumber": 20, "name": "精進料理膳", "sapItemCode": "3709", "quantity": 1, "price": 2280, "productGroup": "2", "receiptGroup": "A"}],
             "payers": [{"payer": "chief_mourner", "label": "喪主", "amount": 3080, "discount": 0, "tax": 280}],
             "grandTotals": {"amount": 3080},
+            "summary": {"payers": [{"payer": "chief_mourner", "label": "喪主", "sapSalesOrder": "783",
+                                     "netAmount": 2800, "taxAmount": 280, "totalAmount": 3080}]},
             "discountBreakdown": []}
+
+def sap_order_summary(so):
+    items = [{"materialCode": "3579", "materialDescription": "ブレンドコーヒー", "netAmount": 800, "quantity": 2},
+             {"materialCode": "3709", "materialDescription": "精進料理膳", "netAmount": 2000, "quantity": 1}]
+    if so == "784":
+        return {"success": True,
+                "summary": {"sapSalesOrder": "784", "header": {"currency": "JPY", "netAmount": 2800}, "items": items},
+                "amounts": {"netAmount": 2800, "grossAvailable": False}}
+    return {"success": True,
+            "summary": {"sapSalesOrder": so, "header": {"currency": "JPY", "netAmount": 2800, "taxAmount": 280,
+                                                          "totalNetAmount": 2800}, "items": items},
+            "amounts": {"netAmount": 2800, "taxAmount": 280, "grossAmount": 3080}}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
@@ -215,7 +229,14 @@ class H(http.server.SimpleHTTPRequestHandler):
         if p == '/api/admin/inventory/fetch' and method == 'POST':
             return self._json({"success": True, "items": [], "total": 0, "hasMore": False})
         if p == '/api/admin/reservation-consent-tokens' and method == 'POST':
-            return self._json({"success": True, "tokens": {}})
+            try:
+                n = int(self.headers.get('Content-Length') or 0)
+                body = json.loads(self.rfile.read(n) or b'{}')
+                ids = body.get('reservationIds') or []
+            except Exception:
+                ids = []
+            toks = [{"reservationId": rid, "consentToken": f"tok-{i+1:04d}"} for i, rid in enumerate(ids)]
+            return self._json({"success": True, "tokens": toks, "ttlHours": 24})
         if p == '/api/pre-consent-fields.js':
             body = ("window.PreConsentFields={"
                     "normalizeKana:function(v){return String(v||'').normalize('NFKC')"
@@ -224,6 +245,13 @@ class H(http.server.SimpleHTTPRequestHandler):
                     "validatePreConsentForm:function(raw,opt){var v={};for(var k in raw){v[k]=typeof raw[k]==='string'?raw[k].trim():raw[k];}"
                     "['deceasedLastNameKana','deceasedFirstNameKana','applicantLastNameKana','applicantFirstNameKana']"
                     ".forEach(function(k){if(v[k])v[k]=window.PreConsentFields.normalizeKana(v[k]);});"
+                    "var req=['hallId','funeralDate','deceasedLastName','deceasedFirstName','deceasedLastNameKana',"
+                    "'deceasedFirstNameKana','applicantLastName','applicantFirstName','applicantLastNameKana',"
+                    "'applicantFirstNameKana','applicantPhone','applicantEmail','applicantPostalCode','applicantAddress'];"
+                    "var miss=req.filter(function(k){return !v[k];});"
+                    "if(miss.length)return {ok:false,errors:[{message:'必須項目を入力してください'}],values:v};"
+                    "if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(String(v.applicantEmail||'')))"
+                    "return {ok:false,errors:[{message:'メールアドレスの形式を確認してください'}],values:v};"
                     "return {ok:true,errors:[],values:v};}"
                     "};").encode()
             self.send_response(200)
@@ -266,6 +294,9 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self._json({"success": True, "members": MEMBERS})
         if re.match(r'^/api/admin/checkin/[^/]+/summary$', p):
             return self._json(summary_payload(p.split('/')[4]))
+        m = re.match(r'^/api/admin/sap-order/([^/]+)/summary$', p)
+        if m:
+            return self._json(sap_order_summary(m.group(1)))
         if re.match(r'^/api/admin/checkin/[^/]+/orders$', p):
             return self._json({"success": True, "orders": []})
         if re.match(r'^/api/admin/checkin/[^/]+/cart$', p):
