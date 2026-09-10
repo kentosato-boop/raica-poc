@@ -163,6 +163,52 @@ class H(http.server.SimpleHTTPRequestHandler):
         p = self.path.split('?')[0]
         q = self.path.split('?', 1)[1] if '?' in self.path else ''
         scenario = self.headers.get('X-Scenario', 'member')
+        if p == '/api/crm/call-list':
+            return self._json({"success": True, "list": [
+                {"memberId": "M-001", "memberName": "東博　花子", "phone": "090-1234-5678", "funeralDate": TODAY,
+                 "assignment": {"status": "架電済み", "assignedTo": "U-CC01", "nextCallAt": ""},
+                 "ticket": {"labels": ["海洋散骨"]}},
+                {"memberId": "M-002", "memberName": "東博　一郎", "phone": "080-2345-6789", "funeralDate": TODAY,
+                 "assignment": {"status": "再架電", "assignedTo": "U-CC01", "nextCallAt": TODAY + "T15:00"},
+                 "ticket": {"labels": ["仏壇・仏具"]}},
+                {"memberId": "M-003", "memberName": "東博　太郎", "phone": "070-3456-7890", "funeralDate": TODAY,
+                 "assignment": None, "ticket": None},
+                {"memberId": "M-004", "memberName": "佐藤　次郎", "phone": "090-4567-8901", "funeralDate": TODAY,
+                 "assignment": {"status": "資料請求", "assignedTo": "U-CC02", "nextCallAt": ""},
+                 "ticket": {"labels": ["永代供養", "手元供養"]}}]})
+        if p == '/api/crm/call-tickets':
+            return self._json({"success": True, "tickets": [
+                {"id": "T-001", "memberName": "東博　花子", "phone": "090-1234-5678", "status": "架電済み",
+                 "labels": ["海洋散骨"], "totalCalls": 2, "lastCallAt": TODAY + "T10:30:00"},
+                {"id": "T-002", "memberName": "東博　一郎", "phone": "080-2345-6789", "status": "再架電",
+                 "labels": ["仏壇・仏具"], "totalCalls": 1, "lastCallAt": TODAY + "T09:10:00"},
+                {"id": "T-003", "memberName": "佐藤　次郎", "phone": "090-4567-8901", "status": "資料請求",
+                 "labels": ["永代供養", "手元供養"], "totalCalls": 3, "lastCallAt": TODAY + "T11:45:00"}]})
+        if p == '/api/crm/tickets':
+            return self._json({"success": True, "openCount": 1, "tickets": [
+                {"id": "LT-001", "subject": "納骨のご相談", "lineDisplayName": "東博　花子", "memberName": "東博　花子",
+                 "status": "open", "lastMessage": "四十九日の納骨について教えてください", "lastMessageAt": TODAY + "T13:05:00",
+                 "unreadCount": 1, "updatedAt": TODAY + "T13:05:00"},
+                {"id": "LT-002", "subject": "資料のお礼", "lineDisplayName": "東博　一郎", "memberName": "東博　一郎",
+                 "status": "closed", "lastMessage": "資料が届きました。ありがとうございます。", "lastMessageAt": TODAY + "T09:40:00",
+                 "unreadCount": 0, "updatedAt": TODAY + "T09:40:00"}]})
+        if p == '/api/crm/sub-tickets':
+            return self._json({"success": True, "subTickets": [
+                {"id": "S-001", "memberName": "東博　花子", "label": "海洋散骨", "status": "資料請求",
+                 "assignedTo": "ラベル担当A", "nextAppointment": TODAY + " 14:00"},
+                {"id": "S-002", "memberName": "佐藤　次郎", "label": "永代供養", "status": "申込手続き",
+                 "assignedTo": "ラベル担当B", "nextAppointment": ""},
+                {"id": "S-003", "memberName": "東博　一郎", "label": "仏壇・仏具", "status": "未対応",
+                 "assignedTo": "", "nextAppointment": ""}]})
+        if p == '/api/crm/stats':
+            return self._json({"success": True, "stats": {
+                "未登録": 1, "再架電": 1, "架電済み": 1, "資料請求": 1, "詳細打合せ": 0,
+                "totalTickets": 3, "totalSubTickets": 3, "todayCalls": 4,
+                "subByStatus": {"未対応": 1, "資料請求": 1, "申込手続き": 1}}})
+        if p == '/api/crm/labels':
+            return self._json({"success": True, "labels": [
+                {"name": "海洋散骨", "color": "#0ea5e9"}, {"name": "永代供養", "color": "#8b5cf6"},
+                {"name": "仏壇・仏具", "color": "#f59e0b"}, {"name": "手元供養", "color": "#10b981"}]})
         if p == '/api/member':
             return self._json(member_payload(scenario, TODAY))
         if p == '/api/product-flavors':
