@@ -284,22 +284,73 @@ class H(http.server.SimpleHTTPRequestHandler):
             toks = [{"reservationId": rid, "consentToken": f"tok-{i+1:04d}"} for i, rid in enumerate(ids)]
             return self._json({"success": True, "tokens": toks, "ttlHours": 24})
         if p == '/api/pre-consent-fields.js':
-            body = ("window.PreConsentFields={"
-                    "normalizeKana:function(v){return String(v||'').normalize('NFKC')"
-                    ".replace(/[\\u30a1-\\u30f6]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60)})"
-                    ".replace(/[\\s\\u3000]+/g,' ').trim()},"
-                    "validatePreConsentForm:function(raw,opt){var v={};for(var k in raw){v[k]=typeof raw[k]==='string'?raw[k].trim():raw[k];}"
-                    "['deceasedLastNameKana','deceasedFirstNameKana','applicantLastNameKana','applicantFirstNameKana']"
-                    ".forEach(function(k){if(v[k])v[k]=window.PreConsentFields.normalizeKana(v[k]);});"
-                    "var req=['hallId','funeralDate','deceasedLastName','deceasedFirstName','deceasedLastNameKana',"
-                    "'deceasedFirstNameKana','applicantLastName','applicantFirstName','applicantLastNameKana',"
-                    "'applicantFirstNameKana','applicantPhone','applicantEmail','applicantPostalCode','applicantAddress'];"
-                    "var miss=req.filter(function(k){return !v[k];});"
-                    "if(miss.length)return {ok:false,errors:[{message:'必須項目を入力してください'}],values:v};"
-                    "if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(String(v.applicantEmail||'')))"
-                    "return {ok:false,errors:[{message:'メールアドレスの形式を確認してください'}],values:v};"
-                    "return {ok:true,errors:[],values:v};}"
-                    "};").encode()
+            # 実機 functions/pre-consent-fields.js と同一のフィールド定義・エラー文言を再現
+            body = ("""
+window.PreConsentFields=(function(){
+  function kataToHira(v){return String(v||'').replace(/[\\u30A1-\\u30F6\\u30FD\\u30FE]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0x60);});}
+  function normalizeKana(v){return kataToHira(String(v||'').normalize('NFKC')).replace(/[\\s\\u3000]+/g,' ').trim();}
+  function normalizeText(v){return String(v||'').normalize('NFKC').trim();}
+  function digitsOnly(v){return String(v||'').replace(/[^0-9]/g,'');}
+  var KANA_OK=/^[\\u3041-\\u3096\\u30F7-\\u30FA\\u30FC\\u30FB\\u309D\\u309E ]+$/,KANA_HAS=/[\\u3041-\\u3096\\u30F7-\\u30FA]/;
+  var EMAIL=/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+  var SPECS=[
+    {key:'hallId',label:'斎場',kind:'hall',max:100},{key:'funeralDate',label:'火葬日',kind:'date',max:10},
+    {key:'deceasedLastName',label:'故人様姓',kind:'text',max:50},{key:'deceasedFirstName',label:'故人様名',kind:'text',max:50},
+    {key:'deceasedLastNameKana',label:'故人様姓（かな）',kind:'kana',max:50},{key:'deceasedFirstNameKana',label:'故人様名（かな）',kind:'kana',max:50},
+    {key:'applicantLastName',label:'申込者姓',kind:'text',max:50},{key:'applicantFirstName',label:'申込者名',kind:'text',max:50},
+    {key:'applicantLastNameKana',label:'申込者姓（かな）',kind:'kana',max:50},{key:'applicantFirstNameKana',label:'申込者名（かな）',kind:'kana',max:50},
+    {key:'applicantPhone',label:'電話番号',kind:'tel'},{key:'applicantEmail',label:'メールアドレス',kind:'email',max:254},
+    {key:'applicantPostalCode',label:'郵便番号',kind:'postal'},{key:'applicantAddress',label:'住所',kind:'text',max:200},
+    {key:'applicantRelationship',label:'続柄',kind:'relationship',max:50}];
+  function check(s,raw,opts){
+    var REQ=s.label+'は必須です';
+    if(s.kind==='kana'){var v=normalizeKana(raw);
+      if(!v)return{value:v,message:REQ};
+      if(v.length>s.max)return{value:v,message:s.label+'は'+s.max+'文字以内で入力してください'};
+      if(!KANA_OK.test(v))return{value:v,message:s.label+'はひらがなまたはカタカナで入力してください'};
+      if(!KANA_HAS.test(v))return{value:v,message:s.label+'にはかなを1文字以上入力してください'};
+      return{value:v,message:''};}
+    if(s.kind==='tel'){var r=normalizeText(raw);
+      if(r&&/[^0-9()\\-\\s]/.test(r))return{value:digitsOnly(r),message:'電話番号に使用できない文字が含まれています'};
+      var v2=digitsOnly(r); if(!v2)return{value:v2,message:REQ};
+      if(!/^\\d{10,11}$/.test(v2))return{value:v2,message:'電話番号は10桁または11桁で入力してください'};
+      return{value:v2,message:''};}
+    if(s.kind==='postal'){var r2=normalizeText(raw);
+      if(r2&&/[^0-9\\-\\s]/.test(r2))return{value:digitsOnly(r2),message:'郵便番号に使用できない文字が含まれています'};
+      var v3=digitsOnly(r2); if(!v3)return{value:v3,message:REQ};
+      if(!/^\\d{7}$/.test(v3))return{value:v3,message:'郵便番号は7桁で入力してください'};
+      return{value:v3,message:''};}
+    if(s.kind==='email'){var v4=normalizeText(raw);
+      if(!v4)return{value:v4,message:REQ};
+      if(v4.length>s.max)return{value:v4,message:s.label+'は'+s.max+'文字以内で入力してください'};
+      if(!EMAIL.test(v4))return{value:v4,message:'メールアドレスの形式が不正です'};
+      return{value:v4,message:''};}
+    if(s.kind==='date'){var v5=normalizeText(raw);
+      if(!v5)return{value:v5,message:REQ};
+      if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(v5))return{value:v5,message:'火葬日の形式が不正です'};
+      if(opts&&opts.minDate&&v5<opts.minDate)return{value:v5,message:'火葬日は今日以降を指定してください'};
+      return{value:v5,message:''};}
+    if(s.kind==='hall'){var v6=normalizeText(raw);
+      if(!v6)return{value:v6,message:REQ};
+      if(opts&&opts.validHallIds&&!opts.validHallIds.has(v6))return{value:v6,message:'無効な斎場です'};
+      return{value:v6,message:''};}
+    if(s.kind==='relationship'){var v7=normalizeText(raw);
+      if(!v7)return{value:v7,message:REQ};
+      if(v7==='その他')return{value:v7,message:'続柄は具体的に入力してください'};
+      return{value:v7,message:''};}
+    var v8=normalizeText(raw);
+    if(!v8)return{value:v8,message:REQ};
+    if(v8.length>s.max)return{value:v8,message:s.label+'は'+s.max+'文字以内で入力してください'};
+    return{value:v8,message:''};}
+  function validatePreConsentForm(input,options){
+    var errors=[],values={},opts=options||{};
+    SPECS.forEach(function(s){var r=check(s,(input||{})[s.key],opts);values[s.key]=r.value;
+      if(r.message)errors.push({key:s.key,label:s.label,message:r.message});});
+    values.deceasedFullName=(values.deceasedLastName+'　'+values.deceasedFirstName).trim();
+    return{ok:errors.length===0,errors:errors,values:values};}
+  return{validatePreConsentForm:validatePreConsentForm,normalizeKana:normalizeKana};
+})();
+""").encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/javascript; charset=utf-8')
             self.send_header('Content-Length', str(len(body)))
