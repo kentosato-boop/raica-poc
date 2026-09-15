@@ -106,15 +106,49 @@ MOBILE_CATALOG = {"success": True, "plant": "18YT", "sapLocationCode": "YT01",
 LIFF_ORDERS = None
 
 def summary_payload(cid):
-    return {"success": True, "checkinId": cid, "sapStatus": "sent", "sapOrderNos": ["783"],
+    return {"success": True, "checkinId": cid, "sapStatus": "sent", "sapOrderNos": ["783", "784"],
             "totals": {"totalAmount": 3080, "taxTotal": 280, "netTotal": 2800},
             "items": [{"lineNumber": 10, "name": "ブレンドコーヒー", "sapItemCode": "3579", "quantity": 2, "price": 400, "productGroup": "1", "receiptGroup": "A"},
                        {"lineNumber": 20, "name": "精進料理膳", "sapItemCode": "3709", "quantity": 1, "price": 2280, "productGroup": "2", "receiptGroup": "A"}],
             "payers": [{"payer": "chief_mourner", "label": "喪主", "amount": 3080, "discount": 0, "tax": 280}],
             "grandTotals": {"amount": 3080},
-            "summary": {"payers": [{"payer": "chief_mourner", "label": "喪主", "sapSalesOrder": "783",
-                                     "netAmount": 2800, "taxAmount": 280, "totalAmount": 3080}]},
+            "summary": {"payers": [
+                {"payerType": "chief_mourner", "payerLabel": "喪主", "payerName": "東博 一郎", "paymentType": "cash",
+                 "sapSalesOrder": "783", "customerId": "0000900123",
+                 "grossAmount": 4100, "discount": 410, "netAmount": 3690, "taxAmount": 369, "totalAmount": 4059,
+                 "appliedDiscounts": [{"conditionType": "Z040", "label": "区民葬割引", "rateValue": 10, "itemCount": 2, "amount": -410}]},
+                {"payerType": "funeral_company", "payerLabel": "葬儀社", "payerName": "幕内祭典", "paymentType": "account",
+                 "sapSalesOrder": "784", "customerId": "0001000123",
+                 "grossAmount": 1540, "discount": 0, "netAmount": 1540, "taxAmount": 154, "totalAmount": 1694,
+                 "cashbackTotal": 300, "cashbackNet": 273, "cashbackTax": 27}],
+                "grandTotals": {"grossAmount": 5640, "discount": 410, "netAmount": 5230,
+                                 "taxAmount": 523, "totalAmount": 5753, "cashbackTotal": 300}},
             "discountBreakdown": []}
+
+def cart_payload(cid):
+    disc = lambda amt, n: [{"conditionType": "Z040", "label": "区民葬割引", "rateValue": 10, "itemCount": n, "amount": -amt}]
+    return {"success": True, "cart": {
+        "status": "SUCCESS", "externalOrderId": "TEST-2500200",
+        "items": [
+            {"lineNumber": 10, "materialCode": "3579", "text": "ブレンドコーヒー", "quantity": 2, "unit": "個", "receiptGroup": 1,
+             "thirdSalesSpecProductGroup": "1", "thirdSalesSpecProductGroupLabel": "喪主",
+             "sapAmounts": {"grossAmount": 800, "discount": 80, "netAmount": 720, "netPriceAmount": 400,
+                             "taxAmount": 72, "totalAmount": 792, "appliedDiscounts": disc(80, 1)}},
+            {"lineNumber": 20, "materialCode": "3709", "text": "精進料理膳", "quantity": 1, "unit": "個", "receiptGroup": 1,
+             "thirdSalesSpecProductGroup": "1", "thirdSalesSpecProductGroupLabel": "喪主",
+             "sapAmounts": {"grossAmount": 3300, "discount": 330, "netAmount": 2970, "netPriceAmount": 3300,
+                             "taxAmount": 297, "totalAmount": 3267, "appliedDiscounts": disc(330, 1)}},
+            {"lineNumber": 30, "materialCode": "3601", "text": "瓶ビール（中瓶）", "quantity": 2, "unit": "本", "receiptGroup": 2,
+             "thirdSalesSpecProductGroup": "2", "thirdSalesSpecProductGroupLabel": "葬儀社",
+             "sapAmounts": {"grossAmount": 1540, "discount": 0, "netAmount": 1540, "netPriceAmount": 770,
+                             "taxAmount": 154, "totalAmount": 1694}},
+        ],
+        "sapAmounts": {
+            "totals": {"grossAmount": 5640, "discount": 410, "netAmount": 5230, "taxAmount": 523,
+                        "totalAmount": 5753, "cashback": 300},
+            "discountBreakdown": [{"conditionType": "Z040", "label": "区民葬割引", "rateValue": 10, "itemCount": 2, "amount": -410}],
+        },
+    }}
 
 def sap_order_summary(so):
     items = [{"materialCode": "3579", "materialDescription": "ブレンドコーヒー", "netAmount": 800, "quantity": 2},
@@ -397,7 +431,7 @@ window.PreConsentFields=(function(){
         if re.match(r'^/api/admin/checkin/[^/]+/orders$', p):
             return self._json({"success": True, "orders": []})
         if re.match(r'^/api/admin/checkin/[^/]+/cart$', p):
-            return self._json(summary_payload(p.split('/')[4]))
+            return self._json(cart_payload(p.split('/')[4]))
         if re.match(r'^/api/admin/checkin/[^/]+/receipt-splits$', p):
             return self._json({"success": True, "items": summary_payload('')["items"], "groups": ["A", "B"]})
         if p == '/api/admin/webhooks':
