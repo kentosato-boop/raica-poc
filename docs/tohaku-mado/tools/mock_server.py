@@ -125,6 +125,19 @@ def summary_payload(cid):
                                  "taxAmount": 523, "totalAmount": 5753, "cashbackTotal": 300}},
             "discountBreakdown": []}
 
+PSM_ORDERS = [
+    {"id": "ORD-P1", "status": "billing", "sapStatus": "success", "checkinId": "CK-001",
+     "itemDetails": [
+         {"sapItemCode": "3579", "name": "ブレンドコーヒー", "quantity": 2, "price": 400,
+          "paymentGroupKey": "1", "thirdSalesSpecProductGroup": "1", "thirdSalesSpecProductGroupLabel": "飲料"},
+         {"sapItemCode": "3709", "name": "精進料理膳", "quantity": 1, "price": 3300,
+          "paymentGroupKey": "1", "thirdSalesSpecProductGroup": "1", "thirdSalesSpecProductGroupLabel": "飲料"}]},
+    {"id": "ORD-P2", "status": "billing", "sapStatus": "success", "checkinId": "CK-001",
+     "itemDetails": [
+         {"sapItemCode": "3601", "name": "瓶ビール（中瓶）", "quantity": 2, "price": 770,
+          "paymentGroupKey": "2", "thirdSalesSpecProductGroup": "2", "thirdSalesSpecProductGroupLabel": "酒類"}]},
+]
+
 def cart_payload(cid):
     disc = lambda amt, n: [{"conditionType": "Z040", "label": "区民葬割引", "rateValue": 10, "itemCount": n, "amount": -amt}]
     return {"success": True, "cart": {
@@ -429,7 +442,7 @@ window.PreConsentFields=(function(){
         if m:
             return self._json(sap_order_summary(m.group(1)))
         if re.match(r'^/api/admin/checkin/[^/]+/orders$', p):
-            return self._json({"success": True, "orders": []})
+            return self._json({"success": True, "orders": PSM_ORDERS})
         if re.match(r'^/api/admin/checkin/[^/]+/cart$', p):
             return self._json(cart_payload(p.split('/')[4]))
         if re.match(r'^/api/admin/checkin/[^/]+/receipt-splits$', p):
