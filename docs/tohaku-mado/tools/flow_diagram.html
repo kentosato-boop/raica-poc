@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body{margin:0;background:#fff;font-family:"Noto Sans CJK JP","Noto Sans JP",sans-serif;color:#26232f}
+  .board{width:980px;padding:28px 30px;box-sizing:border-box}
+  h3{font-size:19px;margin:0 0 6px;color:#26232f}
+  .sub{font-size:12.5px;color:#6d6880;margin:0 0 18px}
+  .legend{display:flex;gap:14px;margin:0 0 16px;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:14px;height:14px;border-radius:4px;display:inline-block}
+  .lane-line{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;row-gap:18px}
+  .step{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.55;min-width:150px;max-width:210px;box-sizing:border-box;position:relative}
+  .talk{background:#e8f6e9;border:1.5px solid #7cba81}
+  .mini{background:#efedf7;border:1.5px solid #8f7fd0}
+  .line2{background:#e9f2fb;border:1.5px solid #7fa8d0}
+  .step b{display:block;font-size:13.5px;margin-bottom:3px}
+  .step small{color:#5a5570;font-size:11.5px;display:block}
+  .tap{display:inline-block;margin-top:6px;background:#5b4d9e;color:#fff;border-radius:6px;padding:2px 9px;font-size:11.5px}
+  .arrow{display:flex;align-items:center;padding:0 6px;color:#8f7fd0;font-size:20px;font-weight:700}
+  .arrow.warn{color:#c9772a}
+  .note{margin-top:2px;font-size:10.5px;color:#c9772a;font-weight:700}
+  .caption{font-size:11px;color:#6d6880;margin-top:16px;line-height:1.7}
+</style>
+
+<div class="board" id="b1">
+  <h3>前日までの流れ（事前同意）— 画面の行き来</h3>
+  <p class="sub">葬儀社から案内された事前同意用QRコード（またはリンク）から、火葬日前日の17時までにお手続き</p>
+  <div class="legend">
+    <span><span class="dot" style="background:#e8f6e9;border:1.5px solid #7cba81"></span>LINEのトーク・カメラ</span>
+    <span><span class="dot" style="background:#efedf7;border:1.5px solid #8f7fd0"></span>ミニアプリ「東京博善の窓口」</span>
+    <span><span class="dot" style="background:#e9f2fb;border:1.5px solid #7fa8d0"></span>LINEの他の画面（友だち追加）</span>
+  </div>
+  <div class="lane-line">
+    <div class="step talk"><b>① QRを読み取る</b><small>LINEのカメラ／トークのリンクから開く</small></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>② TOP画面</b><small>ルール・お問合せ先を確認</small><span class="tap">申込にすすむ</span></div>
+    <div class="arrow warn">→</div>
+    <div class="step line2"><b>③ 友だち追加<small>（未追加の方のみ）</small></b><small>「💚 友だち追加する」をタップするとLINEの友だち追加画面へ移動します。追加できたらミニアプリに戻り「追加済みの方はこちら →」をタップ</small></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>④ 申込者情報入力</b><small>斎場・火葬日・故人さま・申込者さまの情報</small><span class="tap">次へ（規約確認）</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>⑤ 規約への同意</b><small>火葬の申込規約（必須）＋ミニアプリ利用規約（任意）</small><span class="tap">次へ進む</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>⑥ 完了画面</b><small>「火葬の申込を受付させていただきました。」</small><span class="tap">閉じる</span></div>
+    <div class="arrow warn">→</div>
+    <div class="step talk"><b>⑦ トーク画面に戻る</b><small>「閉じる」でミニアプリが閉じ、LINEのトーク画面に戻ります</small></div>
+  </div>
+  <p class="caption">※ オレンジの矢印＝ミニアプリの外（LINEの画面）へ移動する箇所。③は公式アカウント未追加の方のみ表示され、追加済みの方は②から④へ直接進みます。</p>
+</div>
+
+<div class="board" id="b2">
+  <h3>当日の流れ（火葬同意〜受付）— 画面の行き来</h3>
+  <p class="sub">斎場でお渡しする受付QRコード（予約個別QR）から。前日までに事前同意がお済みの方は②③④が自動的に省略されます</p>
+  <div class="legend">
+    <span><span class="dot" style="background:#e8f6e9;border:1.5px solid #7cba81"></span>LINEのトーク・カメラ</span>
+    <span><span class="dot" style="background:#efedf7;border:1.5px solid #8f7fd0"></span>ミニアプリ「東京博善の窓口」</span>
+  </div>
+  <div class="lane-line">
+    <div class="step talk"><b>① 受付QRを読み取る</b><small>LINEのカメラで読み取り</small></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>② TOP画面</b><small>「📋 火葬のお申し込み対象」で故人氏名・火葬日時・斎場を確認</small><span class="tap">同意にすすむ</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>③ 規約への同意</b><small>未同意の規約だけが表示。同意済みならこの画面は出ません</small><span class="tap">次へ進む</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>④ 申込者情報入力<small>（未入力の場合のみ）</small></b><small>氏名・電話・住所・続柄</small><span class="tap">入力して受付へ進む</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>⑤ 受付</b><small>お名前と「未受付」の状態を確認</small><span class="tap">火葬申込をする</span></div>
+    <div class="arrow">→</div>
+    <div class="step mini"><b>⑥ 受付完了</b><small>受付番号（#1 など）と受付時刻が表示。そのままミニアプリでご注文へ</small></div>
+  </div>
+  <p class="caption">※ 当日の流れではトーク画面へ自動的に戻る場面はありません。受付完了後はミニアプリ内で「お食事・ご注文へ」に進みます（下部メニューの「公式」からトーク画面へ移動できます）。</p>
+</div>

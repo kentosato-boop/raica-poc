@@ -1,0 +1,6 @@
+# mado 本体ソース（別プロジェクト）は Drive から取得してここに置くが、コミットしない
+public/
+# 生成物
+shots/
+tohaku-mado-manual.html
+tohaku-mado-manual-print.html
