@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """mado admin.html/index.html 用ローカルモックサーバー（スクリーンショット撮影用）"""
-import json, re, time, datetime, http.server, socketserver, os
+import json, re, time, datetime, http.server, socketserver, os, urllib.parse
 
 PORT = 8787
 ROOT = os.path.join(os.path.dirname(__file__), 'public')
@@ -304,6 +304,18 @@ class H(http.server.SimpleHTTPRequestHandler):
             return self._json({"menu": {"お飲み物": MENU_ITEMS[:4], "お食事": MENU_ITEMS[4:6]}, "salesPointName": "控室"})
         if p == '/api/admin/me':
             return self._json({"success": True, "user": USERS[0]})
+        if p == '/api/admin/sap/products' or p.startswith('/api/admin/sap/products?'):
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            kw = (qs.get('search') or [''])[0]
+            cands = [
+                {"sapItemCode": "200100", "name": "火葬料金（最上等）", "price": 59000, "productGroup": "2", "unit": "AU"},
+                {"sapItemCode": "200101", "name": "火葬料金（特別殯館）", "price": 107500, "productGroup": "2", "unit": "AU"},
+                {"sapItemCode": "200102", "name": "火葬料金（最上等・区民葬）", "price": 40000, "productGroup": "2", "unit": "AU"},
+                {"sapItemCode": "3579", "name": "ブレンドコーヒー", "price": 400, "productGroup": "20", "unit": "AU"},
+                {"sapItemCode": "3601", "name": "瓶ビール（中瓶）", "price": 770, "productGroup": "20", "unit": "AU"},
+            ]
+            items = [c for c in cands if not kw or kw.split('（')[0] in c["name"]]
+            return self._json({"success": True, "items": items})
         if p == '/api/admin/sap/products/urns':
             return self._json({"success": True, "items": [
                 {"code": "28307", "name": "骨壺（白磁 7寸）", "price": 1160, "size": "7寸"},
